@@ -1,28 +1,19 @@
-import os
-import requests
-from dotenv import load_dotenv
 from llm import chat
-
-load_dotenv()
-
-RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://localhost:8083")
-RAG_DOC_ID = os.getenv("RAG_DOC_ID", "")
+from rag.store import query as vector_query
 
 
 def search_notes(query: str, top_k: int = 3) -> str:
-    """检索型工具：从 rag-assiant 获取相关片段。"""
+    """检索型工具：直接从本地向量库（rag/store）检索相关资料片段。"""
     try:
-        resp = requests.post(
-            f"{RAG_SERVICE_URL}/api/retrieve",
-            json={"question": query, "doc_id": RAG_DOC_ID, "top_k": top_k},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        chunks = data.get("data", [])
-        if not chunks:
-            return "没有检索到相关内容。"
-        parts = [f"[片段{i + 1}] {c['content']}（来源：{c['source']}）" for i, c in enumerate(chunks)]
+        result = vector_query("documents", query, top_k=top_k)
+        if not result or not result.get("documents") or not result["documents"][0]:
+            return "向量库还没有内容。请先把资料拖进 docs/ 文件夹，再运行 ingest.py。"
+        chunks = result["documents"][0]
+        metas = result.get("metadatas", [[]])[0]
+        parts = []
+        for i, c in enumerate(chunks):
+            src = metas[i].get("source", "") if i < len(metas) else ""
+            parts.append(f"[片段{i + 1}] {c}（来源：{src}）")
         return "\n\n".join(parts)
     except Exception as e:
         return f"检索失败: {e}"
