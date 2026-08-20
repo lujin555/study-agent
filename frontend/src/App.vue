@@ -35,10 +35,13 @@ async function send() {
   const q = question.value.trim();
   if (!q || loading.value) return;
   loading.value = true;
+  const history = messages.value
+    .filter(m => m.role === "user" || m.role === "assistant")
+    .map(m => ({ role: m.role, content: m.content }));
   messages.value.push({ role: "user", content: q });
   question.value = "";
   try {
-    const res = await askAgent(q);
+    const res = await askAgent(q, history);
     if (res.code === 200) {
       messages.value.push({ role: "assistant", content: res.data.answer, trace: res.data.trace });
     } else {

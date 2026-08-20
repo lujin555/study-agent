@@ -3,6 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from agent import run_agent
 
+
+class ChatRequest(BaseModel):
+    question: str
+    history: list = []  # 新增：前端传来的历史对话
+
+
 app = FastAPI(title="study-agent")
 
 app.add_middleware(
@@ -13,13 +19,10 @@ app.add_middleware(
 )
 
 
-class ChatRequest(BaseModel):
-    question: str
-
-
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    return {"code": 200, "data": run_agent(req.question)}
+
+    return {"code": 200, "data": run_agent(req.question, history=req.history)}
 
 
 if __name__ == "__main__":

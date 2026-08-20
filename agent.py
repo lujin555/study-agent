@@ -51,13 +51,15 @@ def call_tool(name: str, args: dict) -> str:
     except Exception as e:
         return f"工具执行失败: {e}"
 
-
-def run_agent(question: str, max_rounds: int = 5) -> dict:
+def run_agent(question: str, history: list = None, max_rounds: int = 5, max_history_items: int = 20) -> dict:
     """手写 agent loop。messages 是状态，贯穿整个循环。"""
+    history = (history or [])[-max_history_items:]  # 口袋最多 20 条，超了挤掉最旧的
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": question},
     ]
+    if history:
+        messages.extend(history)                     # 之前的对话按时间顺序放进来
+    messages.append({"role": "user", "content": question})  # 当前问题放最后
     trace = []
 
     for _ in range(max_rounds):
