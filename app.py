@@ -1,8 +1,10 @@
+import json
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from agent import run_agent
-
+from agent import run_agent, run_agent_stream
 
 class ChatRequest(BaseModel):
     question: str
@@ -21,9 +23,11 @@ app.add_middleware(
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
+    def event_stream():
+        for e in run_agent_stream(req.question, history=req.history):
+            yield "data: " + json.dumps(e, ensure_ascii=False) + "\n\n"
 
-    return {"code": 200, "data": run_agent(req.question, history=req.history)}
-
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 if __name__ == "__main__":
     import uvicorn

@@ -12,6 +12,9 @@
           </div>
         </details>
       </div>
+            <div v-if="status" class="msg assistant">
+        <div class="bubble">{{ status }}</div>
+      </div>
       <div v-if="loading" class="msg assistant">
         <div class="bubble">思考中...</div>
       </div>
@@ -30,6 +33,32 @@ import { askAgent } from "./api.js";
 const question = ref("");
 const messages = ref([]);
 const loading = ref(false);
+const status = ref("");       // "正在查资料…"之类的过程提示
+
+// ===== 打字机：队列 + 定时器 =====
+const queue = ref([]);        // 排队等待显示的字
+let timer = null;             // 定时器 id
+let currentMsg = null;        // 正在"打字"的那条消息
+
+function startTypewriter() {
+  currentMsg = { role: "assistant", content: "" };
+  messages.value.push(currentMsg);
+  queue.value = [];
+  timer = setInterval(() => {
+    const ch = queue.value.shift();       // 从队头取一个字
+    if (ch) currentMsg.content += ch;     // 拼到消息上
+  }, 50);                                 // 每 50ms 一个
+}
+
+function flushQueue() {
+  // done 来了：队列里剩下的字一次全显示，停表
+  if (currentMsg) {
+    currentMsg.content += queue.value.join("");
+    queue.value = [];
+  }
+  clearInterval(timer);
+  timer = null;
+}
 
 async function send() {
   const q = question.value.trim();
@@ -41,16 +70,24 @@ async function send() {
   messages.value.push({ role: "user", content: q });
   question.value = "";
   try {
-    const res = await askAgent(q, history);
-    if (res.code === 200) {
-      messages.value.push({ role: "assistant", content: res.data.answer, trace: res.data.trace });
-    } else {
-      messages.value.push({ role: "assistant", content: res.detail || "出错了" });
-    }
+    await askAgent(q, history, {
+      answer_start() { startTypewriter(); },          // 开始打字
+      token(data) { queue.value.push(data); },        // 来的字进队列
+      trace(data) {
+        status.value = "正在调用工具: " + data.tool_calls.map(t => t.name).join("、");
+      },
+      done() { flushQueue(); status.value = ""; loading.value = false; },
+      error(data) {
+        flushQueue(); status.value = "";
+        if (currentMsg) currentMsg.content = data;
+        loading.value = false;
+      },
+    });
   } catch (e) {
+    flushQueue(); status.value = "";
     messages.value.push({ role: "assistant", content: "请求失败，请确认后端已启动" });
+    loading.value = false;
   }
-  loading.value = false;
 }
 </script>
 
