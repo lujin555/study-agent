@@ -33,6 +33,7 @@ import { askAgent } from "./api.js";
 const question = ref("");
 const messages = ref([]);
 const loading = ref(false);
+const conversationId = ref("default");   // 当前对话的 id
 const status = ref("");       // "正在查资料…"之类的过程提示
 
 // ===== 打字机：队列 + 定时器 =====
@@ -64,13 +65,10 @@ async function send() {
   const q = question.value.trim();
   if (!q || loading.value) return;
   loading.value = true;
-  const history = messages.value
-    .filter(m => m.role === "user" || m.role === "assistant")
-    .map(m => ({ role: m.role, content: m.content }));
   messages.value.push({ role: "user", content: q });
   question.value = "";
   try {
-    await askAgent(q, history, {
+        await askAgent(q, conversationId.value, {
       answer_start() { startTypewriter(); },          // 开始打字
       token(data) { queue.value.push(data); },        // 来的字进队列
       trace(data) {

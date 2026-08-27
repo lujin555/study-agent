@@ -1,10 +1,10 @@
 const BASE_URL = "/api";
 
-export async function askAgent(question, history, handlers) {
+export async function askAgent(question, conversationId, handlers) {
   const res = await fetch(`${BASE_URL}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, history }),
+    body: JSON.stringify({ question, conversation_id: conversationId }),
   });
   const reader = res.body.getReader();   // 拿到水管
   const decoder = new TextDecoder();     // 字节 → 文字的翻译官
