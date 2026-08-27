@@ -22,3 +22,7 @@ export async function askAgent(question, conversationId, handlers) {
     }
   }
 }
+export async function loadHistory(conversationId) {
+  const res = await fetch(`${BASE_URL}/history?conversation_id=${conversationId}`);
+  return res.json();
+}

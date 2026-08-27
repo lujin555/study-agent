@@ -27,8 +27,8 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
-import { askAgent } from "./api.js";
+import { onMounted, ref } from "vue";
+import { askAgent, loadHistory } from "./api.js";
 
 const question = ref("");
 const messages = ref([]);
@@ -87,6 +87,16 @@ async function send() {
     loading.value = false;
   }
 }
+onMounted(async () => {
+  try {
+    const res = await loadHistory(conversationId.value);
+    if (res.code === 200) {
+      messages.value = res.data.map(m => ({ role: m.role, content: m.content }));
+    }
+  } catch (e) {
+    // 加载失败就空着，不阻塞聊天
+  }
+});
 </script>
 
 <style>

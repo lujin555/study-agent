@@ -33,9 +33,14 @@ async def chat(req: ChatRequest):
             if e["type"] == "token":
                 answer_parts.append(e["data"])
             yield "data: " + json.dumps(e, ensure_ascii=False) + "\n\n"
-        save_message(req.conversation_id, "assistant", "".join(answer_parts))  # 答案存库
+        save_message(req.conversation_id, "assistant", "".join(answer_parts)) # 答案存库
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/history")
+async def history(conversation_id: str = "default"):
+    return {"code": 200, "data": load_history(conversation_id, limit=100)}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8084)
