@@ -8,3 +8,5 @@ dist/
 docs/
 chroma_db/
 .idea/
+chat.db
+test.db
