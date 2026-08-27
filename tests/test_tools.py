@@ -1,44 +1,32 @@
 import tools
 
 
-class FakeResp:
-    def __init__(self, status_code, json_data):
-        self.status_code = status_code
-        self._json = json_data
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise RuntimeError(f"HTTP {self.status_code}")
-
-    def json(self):
-        return self._json
-
-
 def test_search_notes_ok(monkeypatch):
-    def fake_post(url, json=None, timeout=None):
-        return FakeResp(200, {"code": 200, "data": [
-            {"content": "三次握手是 TCP 建立连接的过程", "source": "data/test.pdf"},
-        ]})
+    def fake_query(collection_name, question, top_k=3, persist_path=None):
+        return {
+            "documents": [["三次握手是 TCP 建立连接的过程"]],
+            "metadatas": [[{"source": "data/test.pdf"}]],
+        }
 
-    monkeypatch.setattr(tools.requests, "post", fake_post)
+    monkeypatch.setattr(tools, "vector_query", fake_query)
     result = tools.search_notes("三次握手")
     assert "三次握手" in result
     assert "data/test.pdf" in result
 
 
 def test_search_notes_empty(monkeypatch):
-    def fake_post(url, json=None, timeout=None):
-        return FakeResp(200, {"code": 200, "data": []})
+    def fake_query(collection_name, question, top_k=3, persist_path=None):
+        return None  # 向量库为空
 
-    monkeypatch.setattr(tools.requests, "post", fake_post)
-    assert tools.search_notes("不存在的内容") == "没有检索到相关内容。"
+    monkeypatch.setattr(tools, "vector_query", fake_query)
+    assert tools.search_notes("不存在的内容") == "向量库还没有内容。请先把资料拖进 docs/ 文件夹，再运行 ingest.py。"
 
 
 def test_search_notes_error(monkeypatch):
-    def fake_post(url, json=None, timeout=None):
+    def fake_query(collection_name, question, top_k=3, persist_path=None):
         raise ConnectionError("backend down")
 
-    monkeypatch.setattr(tools.requests, "post", fake_post)
+    monkeypatch.setattr(tools, "vector_query", fake_query)
     assert "检索失败" in tools.search_notes("xxx")
 
 
