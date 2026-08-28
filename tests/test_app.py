@@ -26,6 +26,8 @@ def parse_sse(text):
 
 def test_chat_stream_ok(monkeypatch):
     monkeypatch.setattr(app, "run_agent_stream", fake_stream)
+    monkeypatch.setattr(app, "save_message", lambda *a, **kw: None)  # 不真存库
+    monkeypatch.setattr(app, "load_history", lambda *a, **kw: [])  # 不真查库
     resp = client.post("/api/chat", json={"question": "测试"})
     assert resp.status_code == 200
 
