@@ -3,7 +3,7 @@ from rag.store import query as vector_query
 from config import TOP_K
 
 
-def search_notes(query: str, top_k: int = None, min_similarity: float = 0.6) -> str:
+def search_notes(query: str, top_k: int = None, max_distance: float = 0.6) -> str:
     if top_k is None:
         top_k = TOP_K
     try:
@@ -16,7 +16,7 @@ def search_notes(query: str, top_k: int = None, min_similarity: float = 0.6) -> 
         parts = []
         for i, c in enumerate(chunks):
             d = dists[i] if i < len(dists) else 0     # 拿这一条的距离
-            if d > min_similarity:                    # 太远 = 不够相关
+            if d > max_distance:                      # 太远 = 不够相关
                 continue                              # 过滤掉！
             src = metas[i].get("source", "") if i < len(metas) else ""
             parts.append(f"[片段{i + 1}] {c}（来源：{src}）")

@@ -41,15 +41,6 @@ const queue = ref([]);        // 排队等待显示的字
 let timer = null;             // 定时器 id
 let currentMsg = null;        // 正在"打字"的那条消息
 
-  timer = setInterval(() => {
-    const pending = queue.value.length;                 // 看看积压了多少
-    if (pending > 0) {
-      const take = Math.max(1, Math.ceil(pending / 10));  // 积压越多，一次取越多（追赶）
-      currentMsg.content += queue.value.splice(0, take).join("");
-      scrollToBottom();                                 // 每显示一批就滚到底
-    }
-  }, 50);
-
 function flushQueue() {
   // done 来了：队列里剩下的字一次全显示，停表
   if (currentMsg) {
@@ -61,6 +52,20 @@ function flushQueue() {
 }
 
 const messagesBox = ref(null);   // 消息容器的引用
+function startTypewriter() {
+  currentMsg = { role: "assistant", content: "" };   // 创建气泡（丢了）
+  messages.value.push(currentMsg);                   // 挂到消息列表（丢了）
+  queue.value = [];                                  // 清队列（丢了）
+  clearInterval(timer);                              // 防重复开表（建议加）
+  timer = setInterval(() => {
+    const pending = queue.value.length;
+    if (pending > 0) {
+      const take = Math.max(1, Math.ceil(pending / 10));
+      currentMsg.content += queue.value.splice(0, take).join("");
+      scrollToBottom();
+    }
+  }, 50);
+}
 
 function scrollToBottom() {
   if (messagesBox.value) {
@@ -75,16 +80,27 @@ async function send() {
   scrollToBottom();
   question.value = "";
   try {
-        await askAgent(q, conversationId.value, {
+    const traces = [];                                  // 攒工具过程
+    await askAgent(q, conversationId.value, {
       answer_start() { startTypewriter(); },          // 开始打字
       token(data) { queue.value.push(data); },        // 来的字进队列
       trace(data) {
+        traces.push(data);                            // 攒起来，done 时挂到消息上
         status.value = "正在调用工具: " + data.tool;
       },
-     done() { flushQueue(); scrollToBottom(); status.value = ""; loading.value = false; },
+      done() {
+        flushQueue();
+        if (currentMsg) currentMsg.trace = traces;     // 面板复活的关键
+        scrollToBottom();
+        status.value = "";
+        loading.value = false;
+      },
       error(data) {
         flushQueue(); status.value = "";
-        if (currentMsg) currentMsg.content = data;
+        if (currentMsg) {
+          currentMsg.content = data;
+          currentMsg.trace = traces;
+        }
         loading.value = false;
       },
     });
