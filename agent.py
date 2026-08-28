@@ -51,39 +51,23 @@ def call_tool(name: str, args: dict) -> str:
     except Exception as e:
         return f"工具执行失败: {e}"
 
+
 def run_agent(question: str, history: list = None, max_rounds: int = 5, max_history_items: int = 20) -> dict:
-    """手写 agent loop。messages 是状态，贯穿整个循环。"""
-    history = (history or [])[-max_history_items:]  # 口袋最多 20 条，超了挤掉最旧的
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-    ]
-    if history:
-        messages.extend(history)                     # 之前的对话按时间顺序放进来
-    messages.append({"role": "user", "content": question})  # 当前问题放最后
+    """非流式版：收集流式事件，拼出完整结果。"""
+    answer = ""
     trace = []
+    for e in run_agent_stream(question, history, max_rounds, max_history_items):
+        if e["type"] == "token":
+            answer += e["data"]
+        elif e["type"] == "trace":
+            trace.append(e["data"])
+        elif e["type"] == "error":
+            answer = e["data"]
+    return {"answer": answer, "trace": trace}
 
-    for _ in range(max_rounds):
-        resp = chat(messages, tools=TOOLS)
-        msg = resp["choices"][0]["message"]
 
-        if msg.get("tool_calls"):
-            messages.append(msg)  # 模型消息（含调用意图）进状态
-            for tc in msg["tool_calls"]:
-                name = tc["function"]["name"]
-                try:
-                    args = json.loads(tc["function"]["arguments"] or "{}")
-                except json.JSONDecodeError:
-                    args = {}
-                result = call_tool(name, args)
-                trace.append({"tool": name, "arguments": args, "result_preview": result[:100]})
-                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
-            continue
-
-        return {"answer": msg["content"], "trace": trace}
-
-    return {"answer": "已达到最大轮数，强制结束。", "trace": trace}
 def run_agent_stream(question, history=None, max_rounds=5, max_history_items=20):
-    """流式版 run_agent：工具调用发 trace 事件，最终回答逐块吐 token。"""
+    """流式版 run_agent：唯一的真源。工具调用发 trace 事件，最终回答逐块吐 token。"""
     history = (history or [])[-max_history_items:]
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -91,17 +75,12 @@ def run_agent_stream(question, history=None, max_rounds=5, max_history_items=20)
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": question})
-    trace = []
 
     for _ in range(max_rounds):
         resp = chat(messages, tools=TOOLS)
         msg = resp["choices"][0]["message"]
 
         if msg.get("tool_calls"):
-            yield {"type": "trace", "data": {"tool_calls": [
-                {"name": tc["function"]["name"], "arguments": tc["function"]["arguments"]}
-                for tc in msg["tool_calls"]
-            ]}}
             messages.append(msg)
             for tc in msg["tool_calls"]:
                 name = tc["function"]["name"]
@@ -110,7 +89,7 @@ def run_agent_stream(question, history=None, max_rounds=5, max_history_items=20)
                 except json.JSONDecodeError:
                     args = {}
                 result = call_tool(name, args)
-                trace.append({"tool": name, "arguments": args, "result_preview": result[:100]})
+                yield {"type": "trace", "data": {"tool": name, "arguments": args, "result_preview": result[:100]}}
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
             continue
 
@@ -120,4 +99,4 @@ def run_agent_stream(question, history=None, max_rounds=5, max_history_items=20)
         yield {"type": "done"}
         return
 
-    yield {"type": "error", "data": "达到最大轮数，强制结束。"}
+    yield {"type": "error", "data": "已达到最大轮数，强制结束。"}

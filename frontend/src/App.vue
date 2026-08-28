@@ -79,7 +79,7 @@ async function send() {
       answer_start() { startTypewriter(); },          // 开始打字
       token(data) { queue.value.push(data); },        // 来的字进队列
       trace(data) {
-        status.value = "正在调用工具: " + data.tool_calls.map(t => t.name).join("、");
+        status.value = "正在调用工具: " + data.tool;
       },
      done() { flushQueue(); scrollToBottom(); status.value = ""; loading.value = false; },
       error(data) {
@@ -103,7 +103,7 @@ onMounted(async () => {
     }
   } catch (e) {
     // 加载失败就空着，不阻塞聊天
-  } 
+  }
 });
 </script>
 

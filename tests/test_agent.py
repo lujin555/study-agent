@@ -17,18 +17,20 @@ def make_tool_call(tool_id, name, args_json):
 
 
 def test_agent_calls_tool_then_answers(monkeypatch):
-    responses = [
-        fake_response(tool_calls=[make_tool_call("call_1", "search_notes", '{"query": "三次握手"}')]),
-        fake_response(content="三次握手是 TCP 建立连接的过程。"),
-    ]
     calls = {"n": 0}
 
     def fake_chat(messages, tools=None):
-        r = responses[calls["n"]]
         calls["n"] += 1
-        return r
+        if calls["n"] == 1:
+            return fake_response(tool_calls=[make_tool_call("call_1", "search_notes", '{"query": "三次握手"}')])
+        return fake_response(content="忽略，答案由 chat_stream 给")
+
+    def fake_chat_stream(messages, tools=None):
+        yield "三次握手是"
+        yield " TCP 建立连接的过程。"
 
     monkeypatch.setattr(agent, "chat", fake_chat)
+    monkeypatch.setattr(agent, "chat_stream", fake_chat_stream)
     result = agent.run_agent("三次握手是什么？")
 
     assert "三次握手" in result["answer"]
@@ -41,7 +43,11 @@ def test_agent_no_tool_when_not_needed(monkeypatch):
     def fake_chat(messages, tools=None):
         return fake_response(content="你好！有什么可以帮你？")
 
+    def fake_chat_stream(messages, tools=None):
+        yield "你好！有什么可以帮你？"
+
     monkeypatch.setattr(agent, "chat", fake_chat)
+    monkeypatch.setattr(agent, "chat_stream", fake_chat_stream)
     result = agent.run_agent("你好")
 
     assert result["answer"] == "你好！有什么可以帮你？"
@@ -60,18 +66,19 @@ def test_agent_max_rounds(monkeypatch):
 
 
 def test_agent_bad_arguments_json(monkeypatch):
-    responses = [
-        fake_response(tool_calls=[make_tool_call("call_1", "search_notes", "not-json")]),
-        fake_response(content="我换个方式回答。"),
-    ]
     calls = {"n": 0}
 
     def fake_chat(messages, tools=None):
-        r = responses[calls["n"]]
         calls["n"] += 1
-        return r
+        if calls["n"] == 1:
+            return fake_response(tool_calls=[make_tool_call("call_1", "search_notes", "not-json")])
+        return fake_response(content="忽略，答案由 chat_stream 给")
+
+    def fake_chat_stream(messages, tools=None):
+        yield "我换个方式回答。"
 
     monkeypatch.setattr(agent, "chat", fake_chat)
+    monkeypatch.setattr(agent, "chat_stream", fake_chat_stream)
     result = agent.run_agent("查一下")
 
     assert len(result["trace"]) == 1
