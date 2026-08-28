@@ -1,7 +1,7 @@
 <template>
   <div class="app">
     <h2>学习助手 Agent</h2>
-    <div class="messages">
+    <div ref="messagesBox" class="messages">
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble">{{ m.content }}</div>
         <details v-if="m.trace && m.trace.length" class="trace">
@@ -41,15 +41,14 @@ const queue = ref([]);        // 排队等待显示的字
 let timer = null;             // 定时器 id
 let currentMsg = null;        // 正在"打字"的那条消息
 
-function startTypewriter() {
-  currentMsg = { role: "assistant", content: "" };
-  messages.value.push(currentMsg);
-  queue.value = [];
   timer = setInterval(() => {
-    const ch = queue.value.shift();       // 从队头取一个字
-    if (ch) currentMsg.content += ch;     // 拼到消息上
-  }, 50);                                 // 每 50ms 一个
-}
+    const pending = queue.value.length;                 // 看看积压了多少
+    if (pending > 0) {
+      const take = Math.max(1, Math.ceil(pending / 10));  // 积压越多，一次取越多（追赶）
+      currentMsg.content += queue.value.splice(0, take).join("");
+      scrollToBottom();                                 // 每显示一批就滚到底
+    }
+  }, 50);
 
 function flushQueue() {
   // done 来了：队列里剩下的字一次全显示，停表
@@ -61,11 +60,19 @@ function flushQueue() {
   timer = null;
 }
 
+const messagesBox = ref(null);   // 消息容器的引用
+
+function scrollToBottom() {
+  if (messagesBox.value) {
+    messagesBox.value.scrollTop = messagesBox.value.scrollHeight;
+  }
+}
 async function send() {
   const q = question.value.trim();
   if (!q || loading.value) return;
   loading.value = true;
   messages.value.push({ role: "user", content: q });
+  scrollToBottom();
   question.value = "";
   try {
         await askAgent(q, conversationId.value, {
@@ -74,7 +81,7 @@ async function send() {
       trace(data) {
         status.value = "正在调用工具: " + data.tool_calls.map(t => t.name).join("、");
       },
-      done() { flushQueue(); status.value = ""; loading.value = false; },
+     done() { flushQueue(); scrollToBottom(); status.value = ""; loading.value = false; },
       error(data) {
         flushQueue(); status.value = "";
         if (currentMsg) currentMsg.content = data;
@@ -92,10 +99,11 @@ onMounted(async () => {
     const res = await loadHistory(conversationId.value);
     if (res.code === 200) {
       messages.value = res.data.map(m => ({ role: m.role, content: m.content }));
+      scrollToBottom()
     }
   } catch (e) {
     // 加载失败就空着，不阻塞聊天
-  }
+  } 
 });
 </script>
 
