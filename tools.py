@@ -1,9 +1,11 @@
 from llm import chat
 from rag.store import query as vector_query
+from config import TOP_K
 
 
-def search_notes(query: str, top_k: int = 3, min_similarity: float = 0.6) -> str:
-    """检索型工具：从本地向量库检索，按距离阈值过滤低相关片段。"""
+def search_notes(query: str, top_k: int = None, min_similarity: float = 0.6) -> str:
+    if top_k is None:
+        top_k = TOP_K
     try:
         result = vector_query("documents", query, top_k=top_k)
         if not result or not result.get("documents") or not result["documents"][0]:

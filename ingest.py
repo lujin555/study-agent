@@ -1,7 +1,7 @@
 """投件箱：把 docs/ 文件夹里的文档自动切块入库。"""
 from pathlib import Path
 
-from config import DOCS_DIR
+from config import DOCS_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 from rag.loader import load_document
 from rag.chunker import split_text
 from rag.store import store_chunks, get_collection
@@ -17,7 +17,7 @@ def ingest_one(path: Path, collection_name: str = COLLECTION) -> int:
         print(f"  跳过（没有文字内容）: {path.name}")
         return 0
 
-    chunks = split_text(text, str(path))
+    chunks = split_text(text, str(path), CHUNK_SIZE, CHUNK_OVERLAP)
     col = get_collection(collection_name)
     if col is not None:
         # 重新入库前清掉这个文件旧的块，避免重复
