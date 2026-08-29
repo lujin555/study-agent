@@ -14,7 +14,7 @@ class FakeResp:
 def test_chat_sends_tools(monkeypatch):
     captured = {}
 
-    def fake_post(url, json=None, headers=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None, stream=False):
         captured["url"] = url
         captured["json"] = json
         return FakeResp(200, {"choices": [{"message": {"content": "ok"}}]})
@@ -27,7 +27,7 @@ def test_chat_sends_tools(monkeypatch):
 
 
 def test_chat_raises_on_error(monkeypatch):
-    def fake_post(url, json=None, headers=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None, stream=False):
         return FakeResp(401, {}, text='{"error": "bad key"}')
 
     monkeypatch.setattr(llm.requests, "post", fake_post)

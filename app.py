@@ -18,9 +18,9 @@ app = FastAPI(title="study-agent")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # 只允许本地前端
+    allow_methods=["GET", "POST"],      # 只允许这两种方法
+    allow_headers=["Content-Type"],     # 只允许这个请求头
 )
 
 
