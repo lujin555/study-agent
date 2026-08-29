@@ -1,6 +1,9 @@
 <template>
   <div class="app">
-    <h2>学习助手 Agent</h2>
+<div class="header">
+  <h2>学习助手 Agent</h2>
+  <button @click="startNewChat">新对话</button>
+</div>
     <div ref="messagesBox" class="messages">
       <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
         <div class="bubble">{{ m.content }}</div>
@@ -33,7 +36,8 @@ import { askAgent, loadHistory } from "./api.js";
 const question = ref("");
 const messages = ref([]);
 const loading = ref(false);
-const conversationId = ref("default");   // 当前对话的 id
+const conversationId = ref(localStorage.getItem("conversation_id") || crypto.randomUUID());
+localStorage.setItem("conversation_id", conversationId.value);
 const status = ref("");       // "正在查资料…"之类的过程提示
 
 // ===== 打字机：队列 + 定时器 =====
@@ -71,6 +75,12 @@ function scrollToBottom() {
   if (messagesBox.value) {
     messagesBox.value.scrollTop = messagesBox.value.scrollHeight;
   }
+}
+function startNewChat() {
+  if (loading.value) return;    // 正在回答时禁止切换，防止流写进已清空的列表
+  conversationId.value = crypto.randomUUID();
+  localStorage.setItem("conversation_id", conversationId.value);
+  messages.value = [];          // 清屏
 }
 async function send() {
   const q = question.value.trim();
