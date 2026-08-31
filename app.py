@@ -1,5 +1,5 @@
 import secrets
-from fastapi import Depends, Header, HTTPException, UploadFile, File
+from fastapi import Depends, Header, HTTPException, UploadFile, File, Form
 from pathlib import Path
 from ingest import ingest_one
 from config import ACCESS_PASSWORD, DOCS_DIR
@@ -22,6 +22,8 @@ class ChatRequest(BaseModel):
 app = FastAPI(title="study-agent")
 # 简单的内存令牌表（重启失效，够用；生产换数据库）
 _tokens = set()
+# 每个对话最近上传的文档（conversation_id -> 文件名），让"这内容"有指向
+_recent_uploads = {}
 
 
 def _require_auth(authorization: str = Header(None)):
@@ -43,7 +45,7 @@ async def login(req: LoginRequest):
         return {"code": 200, "token": token}
     raise HTTPException(status_code=401, detail="密码错误")
 @app.post("/api/upload")
-async def upload(file: UploadFile = File(...), _: None = Depends(_require_auth)):
+async def upload(file: UploadFile = File(...), conversation_id: str = Form("default"), _: None = Depends(_require_auth)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="没有文件名")
     suffix = Path(file.filename).suffix.lower()
@@ -61,6 +63,7 @@ async def upload(file: UploadFile = File(...), _: None = Depends(_require_auth))
         n = ingest_one(dest)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"入库失败: {e}")
+    _recent_uploads[conversation_id] = safe_name   # 记住"这个对话最近上传了谁"
     if n == 0:
         return {"code": 200, "filename": safe_name, "chunks": 0,
                 "warning": "文件已上传，但没有提取到文字（可能是扫描版 PDF，没有文字层）。请换一份有文字的 PDF，或先做 OCR。"}
@@ -81,7 +84,14 @@ async def chat(req: ChatRequest, _: None = Depends(_require_auth)):
         save_message(req.conversation_id, "user", req.question)
         answer_parts = []
         try:
-            for e in run_agent_stream(req.question, history=load_history(req.conversation_id)):
+            history = load_history(req.conversation_id)
+            recent = _recent_uploads.get(req.conversation_id)
+            if recent:
+                # 告诉模型"用户最近上传了这份文档"，让"这内容/这份文档"有指向
+                history = [
+                    {"role": "system", "content": f"用户最近上传了文档「{recent}」。如果用户问'这内容/这份文档/刚上传的'，指的是这份文档。"}
+                ] + history
+            for e in run_agent_stream(req.question, history=history):
                 if e["type"] == "token":
                     answer_parts.append(e["data"])
                 yield "data: " + json.dumps(e, ensure_ascii=False) + "\n\n"

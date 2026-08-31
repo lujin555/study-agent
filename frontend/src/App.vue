@@ -106,7 +106,7 @@ async function onFileSelected(event) {
   if (!file) return;
   uploadStatus.value = `正在上传 ${file.name}...`;
   try {
-        const res = await uploadDocument(file);
+    const res = await uploadDocument(file, conversationId.value);
     if (res.code === 200) {
       uploadStatus.value = `${res.filename} 已入库 ${res.chunks} 块`;
       if (res.warning) {

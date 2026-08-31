@@ -45,9 +45,10 @@ export async function loadHistory(conversationId) {
   });
   return res.json();
 }
-export async function uploadDocument(file) {
+export async function uploadDocument(file, conversationId) {
   const form = new FormData();
   form.append("file", file);
+  form.append("conversation_id", conversationId);
   const res = await fetch(`${BASE_URL}/upload`, {
     method: "POST",
     headers: { "Authorization": getToken() },  // 注意：不手动设 Content-Type，浏览器会自动带 multipart 边界
