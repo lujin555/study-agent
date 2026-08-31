@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+ACCESS_PASSWORD = os.getenv("ACCESS_PASSWORD", "")
 
 # ===== 向量库 / 投件箱 =====
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")

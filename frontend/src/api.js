@@ -1,11 +1,28 @@
 const BASE_URL = "/api";
 
+export function getToken() {
+  return localStorage.getItem("access_token") || "";
+}
+
+export async function login(password) {
+  const res = await fetch(`${BASE_URL}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  return res.json();
+}
+
 export async function askAgent(question, conversationId, handlers) {
   const res = await fetch(`${BASE_URL}/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Authorization": getToken() },
     body: JSON.stringify({ question, conversation_id: conversationId }),
   });
+  if (res.status === 401) {
+    handlers.unauthorized?.();
+    return;
+  }
   const reader = res.body.getReader();   // 拿到水管
   const decoder = new TextDecoder();     // 字节 → 文字的翻译官
   let buffer = "";                       // 攒残行的地方
@@ -23,6 +40,8 @@ export async function askAgent(question, conversationId, handlers) {
   }
 }
 export async function loadHistory(conversationId) {
-  const res = await fetch(`${BASE_URL}/history?conversation_id=${conversationId}`);
+  const res = await fetch(`${BASE_URL}/history?conversation_id=${conversationId}`, {
+    headers: { "Authorization": getToken() },
+  });
   return res.json();
 }

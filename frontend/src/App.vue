@@ -1,37 +1,46 @@
 <template>
   <div class="app">
-<div class="header">
-  <h2>学习助手 Agent</h2>
-  <button @click="startNewChat">新对话</button>
-</div>
-    <div ref="messagesBox" class="messages">
-      <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
-        <div class="bubble">{{ m.content }}</div>
-        <details v-if="m.trace && m.trace.length" class="trace">
-          <summary>Agent 过程（{{ m.trace.length }} 步）</summary>
-          <div v-for="(t, j) in m.trace" :key="j" class="step">
-            <code>调用了 {{ t.tool }}({{ JSON.stringify(t.arguments) }})</code>
-            <p>结果：{{ t.result_preview }}</p>
-          </div>
-        </details>
-      </div>
-            <div v-if="status" class="msg assistant">
-        <div class="bubble">{{ status }}</div>
-      </div>
-      <div v-if="loading" class="msg assistant">
-        <div class="bubble">思考中...</div>
-      </div>
+    <div v-if="!authed" class="login">
+      <h2>学习助手 Agent</h2>
+      <p class="login-hint">请输入访问密码</p>
+      <input v-model="password" type="password" placeholder="访问密码" @keyup.enter="doLogin" />
+      <button @click="doLogin" :disabled="!password.trim()">登录</button>
+      <p v-if="loginError" class="error">{{ loginError }}</p>
     </div>
-    <form @submit.prevent="send">
-      <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
-      <button :disabled="loading || !question.trim()">发送</button>
-    </form>
+    <template v-else>
+      <div class="header">
+        <h2>学习助手 Agent</h2>
+        <button @click="startNewChat">新对话</button>
+      </div>
+      <div ref="messagesBox" class="messages">
+        <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
+          <div class="bubble">{{ m.content }}</div>
+          <details v-if="m.trace && m.trace.length" class="trace">
+            <summary>Agent 过程（{{ m.trace.length }} 步）</summary>
+            <div v-for="(t, j) in m.trace" :key="j" class="step">
+              <code>调用了 {{ t.tool }}({{ JSON.stringify(t.arguments) }})</code>
+              <p>结果：{{ t.result_preview }}</p>
+            </div>
+          </details>
+        </div>
+        <div v-if="status" class="msg assistant">
+          <div class="bubble">{{ status }}</div>
+        </div>
+        <div v-if="loading" class="msg assistant">
+          <div class="bubble">思考中...</div>
+        </div>
+      </div>
+      <form @submit.prevent="send">
+        <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
+        <button :disabled="loading || !question.trim()">发送</button>
+      </form>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { askAgent, loadHistory } from "./api.js";
+import { askAgent, loadHistory, login, getToken } from "./api.js";
 
 const question = ref("");
 const messages = ref([]);
@@ -39,6 +48,9 @@ const loading = ref(false);
 const conversationId = ref(localStorage.getItem("conversation_id") || crypto.randomUUID());
 localStorage.setItem("conversation_id", conversationId.value);
 const status = ref("");       // "正在查资料…"之类的过程提示
+const authed = ref(!!getToken());   // 有没有登录令牌
+const password = ref("");
+const loginError = ref("");
 
 // ===== 打字机：队列 + 定时器 =====
 const queue = ref([]);        // 排队等待显示的字
@@ -94,6 +106,7 @@ async function send() {
     await askAgent(q, conversationId.value, {
       answer_start() { startTypewriter(); },          // 开始打字
       token(data) { queue.value.push(data); },        // 来的字进队列
+      unauthorized() { onUnauthorized(); },           // 令牌失效 → 回登录页
       trace(data) {
         traces.push(data);                            // 攒起来，done 时挂到消息上
         status.value = "正在调用工具: " + data.tool;
@@ -120,16 +133,39 @@ async function send() {
     loading.value = false;
   }
 }
-onMounted(async () => {
+async function doLogin() {
+  loginError.value = "";
+  const res = await login(password.value);
+  if (res.code === 200) {
+    localStorage.setItem("access_token", res.token);
+    authed.value = true;
+    password.value = "";
+    loadHistoryAndShow();
+  } else {
+    loginError.value = res.detail || "密码错误";
+  }
+}
+
+function onUnauthorized() {
+  localStorage.removeItem("access_token");
+  authed.value = false;
+  loginError.value = "登录已过期，请重新输入密码";
+}
+
+async function loadHistoryAndShow() {
   try {
     const res = await loadHistory(conversationId.value);
     if (res.code === 200) {
       messages.value = res.data.map(m => ({ role: m.role, content: m.content }));
-      scrollToBottom()
+      scrollToBottom();
     }
   } catch (e) {
     // 加载失败就空着，不阻塞聊天
   }
+}
+
+onMounted(() => {
+  if (authed.value) loadHistoryAndShow();
 });
 </script>
 
@@ -138,6 +174,12 @@ onMounted(async () => {
 body { font-family: system-ui, sans-serif; background: #f5f6f8; }
 .app { max-width: 720px; margin: 24px auto; padding: 16px; background: #fff; border-radius: 10px; }
 h2 { margin-bottom: 12px; font-size: 18px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.header h2 { margin-bottom: 0; }
+.login { text-align: center; padding: 40px 20px; }
+.login-hint { color: #888; margin-bottom: 12px; }
+.login input { max-width: 260px; margin: 0 auto 12px; display: block; }
+.error { color: #d33; margin-top: 10px; font-size: 14px; }
 .messages { min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .msg { margin-bottom: 10px; }
 .bubble { padding: 8px 12px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap; }
