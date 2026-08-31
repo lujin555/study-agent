@@ -1,7 +1,7 @@
 """通用文档加载器：支持 PDF / DOCX / TXT"""
 from pathlib import Path
 
-import fitz
+import pymupdf as fitz  # fitz 是 PyMuPDF 的旧名，新版叫 pymupdf
 from docx import Document
 
 

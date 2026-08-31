@@ -8,10 +8,15 @@
       <p v-if="loginError" class="error">{{ loginError }}</p>
     </div>
     <template v-else>
-      <div class="header">
+            <div class="header">
         <h2>学习助手 Agent</h2>
-        <button @click="startNewChat">新对话</button>
+        <div class="header-actions">
+          <input ref="fileInput" type="file" accept=".pdf,.docx,.txt" style="display:none" @change="onFileSelected" />
+          <button @click="fileInput.click()" :disabled="loading">上传资料</button>
+          <button @click="startNewChat">新对话</button>
+        </div>
       </div>
+      <p v-if="uploadStatus" class="upload-status">{{ uploadStatus }}</p>
       <div ref="messagesBox" class="messages">
         <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
           <div class="bubble">{{ m.content }}</div>
@@ -40,7 +45,7 @@
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { askAgent, loadHistory, login, getToken } from "./api.js";
+import { askAgent, loadHistory, login, getToken, uploadDocument } from "./api.js";
 
 const question = ref("");
 const messages = ref([]);
@@ -51,6 +56,8 @@ const status = ref("");       // "正在查资料…"之类的过程提示
 const authed = ref(!!getToken());   // 有没有登录令牌
 const password = ref("");
 const loginError = ref("");
+const fileInput = ref(null);
+const uploadStatus = ref("");
 
 // ===== 打字机：队列 + 定时器 =====
 const queue = ref([]);        // 排队等待显示的字
@@ -93,6 +100,25 @@ function startNewChat() {
   conversationId.value = crypto.randomUUID();
   localStorage.setItem("conversation_id", conversationId.value);
   messages.value = [];          // 清屏
+}
+async function onFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  uploadStatus.value = `正在上传 ${file.name}...`;
+  try {
+        const res = await uploadDocument(file);
+    if (res.code === 200) {
+      uploadStatus.value = `${res.filename} 已入库 ${res.chunks} 块`;
+      if (res.warning) {
+        uploadStatus.value += "。⚠️ " + res.warning;
+      }
+    } else {
+      uploadStatus.value = res.detail || "上传失败";
+    }
+  } catch (e) {
+    uploadStatus.value = "上传失败：请确认后端已启动";
+  }
+  event.target.value = "";   // 清空 input，允许重复选同一文件
 }
 async function send() {
   const q = question.value.trim();

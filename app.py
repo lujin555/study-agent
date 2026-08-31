@@ -1,7 +1,8 @@
 import secrets
-
-from fastapi import Depends, Header, HTTPException
-from config import ACCESS_PASSWORD
+from fastapi import Depends, Header, HTTPException, UploadFile, File
+from pathlib import Path
+from ingest import ingest_one
+from config import ACCESS_PASSWORD, DOCS_DIR
 import json
 from db import init_db, save_message, load_history
 
@@ -41,6 +42,29 @@ async def login(req: LoginRequest):
         _tokens.add(token)
         return {"code": 200, "token": token}
     raise HTTPException(status_code=401, detail="密码错误")
+@app.post("/api/upload")
+async def upload(file: UploadFile = File(...), _: None = Depends(_require_auth)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="没有文件名")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in {".pdf", ".doc", ".docx", ".txt"}:
+        raise HTTPException(status_code=400, detail=f"不支持的文件格式: {suffix}")
+
+    docs_dir = Path(DOCS_DIR)
+    docs_dir.mkdir(exist_ok=True)
+    safe_name = Path(file.filename).name          # 防路径穿越：只取文件名
+    dest = docs_dir / safe_name
+    content = await file.read()
+    dest.write_bytes(content)
+
+    try:
+        n = ingest_one(dest)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"入库失败: {e}")
+    if n == 0:
+        return {"code": 200, "filename": safe_name, "chunks": 0,
+                "warning": "文件已上传，但没有提取到文字（可能是扫描版 PDF，没有文字层）。请换一份有文字的 PDF，或先做 OCR。"}
+    return {"code": 200, "filename": safe_name, "chunks": n}
 
 app.add_middleware(
     CORSMiddleware,
