@@ -1,6 +1,7 @@
 import secrets
 import time
 import io
+from datetime import datetime
 from fastapi import Depends, Header, HTTPException, UploadFile, File, Form
 from pathlib import Path
 from ingest import ingest_one
@@ -73,6 +74,12 @@ async def upload(file: UploadFile = File(...), conversation_id: str = Form("defa
     docs_dir.mkdir(exist_ok=True)
     safe_name = Path(file.filename).name          # 防路径穿越：只取文件名
     dest = docs_dir / safe_name
+    # 同名文件自动重命名（追加时间戳），避免覆盖
+    if dest.exists():
+        stem = Path(safe_name).stem
+        suffix = Path(safe_name).suffix
+        safe_name = f"{stem}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{suffix}"
+        dest = docs_dir / safe_name
     dest.write_bytes(buf.getvalue())
 
     try:

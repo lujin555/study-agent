@@ -1,9 +1,17 @@
 # study-agent v1 设计文档
 
 - 日期：2026-08-17
-- 状态：已与用户确认设计，待审阅
+- 状态：已实现并 Docker 化，架构从"双后端"演进为"单后端本地 ChromaDB"（详见下方更新记录）
 - 仓库：GitHub 待建（用户创建），本地目录 `D:\ai\projects\study-agent`
-- 关联项目：`rag-assiant`（作为检索工具服务，新增 `/api/retrieve` 接口）
+- 关联项目：`rag-assiant`（检索功能已合并到本项目 `rag/` 目录）
+
+## 更新记录
+
+2026-09-03：
+- **架构演进**：不再依赖独立的 `rag-assiant` 服务，检索模块合并到本项目的 `rag/` 目录，使用本地 ChromaDB 存储向量。
+- **已实现原 v1"不做"的功能**：SSE 流式回答、SQLite 对话历史、登录鉴权、Docker 全容器化部署。
+- **新增文件**：`Dockerfile`、`docker-compose.yml`、`frontend/Dockerfile`、`frontend/nginx.conf`、`.dockerignore`、`download_model.py`、`models/`（预置 bge-small-zh-v1.5）。
+- **鲁棒性改进**：登录令牌 24h TTL、上传 50MB 大小限制、同名文件自动重命名、出题结果自动格式化为可读文本。
 
 ## 1. 背景与目标
 
@@ -35,31 +43,43 @@
 ## 3. 架构
 
 ```
-浏览器 (Vue 3)
-  → study-agent FastAPI :8084
-      → Agent Loop（手写）
-          ├─ DeepSeek API（带 tools 参数）
-          ├─ 工具① search_notes → HTTP 调 rag-assiant :8083 /api/retrieve
-          └─ 工具② make_quiz → 调 DeepSeek 生成题目
+浏览器 (Vue 3) :5173
+  → nginx
+      → study-agent FastAPI :8084
+          → Agent Loop（手写）
+              ├─ DeepSeek API（带 tools 参数）
+              ├─ 工具① search_notes → 本地 ChromaDB（rag/store.py）
+              ├─ 工具② make_quiz → 调 DeepSeek 生成题目
+              └─ SQLite（chat.db）保存对话历史
 ```
 
-- study-agent 与 rag-assiant 通过 HTTP 通信（工具即服务）
-- 本地开发需同时运行两个后端（8083 rag-assiant、8084 study-agent）
+- 检索功能已内嵌到 `rag/store.py`，不再依赖外部 `rag-assiant` 服务。
+- Docker 部署下一键启动前后端：`docker compose up --build -d`。
+- 本地开发也可直接运行：`python app.py` + `cd frontend && npm run dev`。
 
 ## 4. 目录结构
 
 ```
 D:\ai\projects\study-agent\
-├── app.py            # FastAPI 入口：POST /api/chat（返回 answer + trace）
+├── app.py            # FastAPI 入口：/api/chat（SSE 流式）、/api/upload、/api/login
 ├── agent.py          # 手写 agent loop + 工具注册表 ★学习核心
 ├── tools.py          # search_notes / make_quiz 两个真实工具
-├── llm.py            # DeepSeek 调用封装（支持 tools 参数）
+├── llm.py            # DeepSeek 调用封装（支持 tools 参数 + 流式）
+├── db.py             # SQLite 对话历史
+├── config.py         # 配置集中入口
+├── ingest.py         # 资料入库
+├── rag/              # RAG 引擎：loader / chunker / store
+├── Dockerfile        # 后端镜像
+├── docker-compose.yml
+├── download_model.py # 首次构建前下载向量模型
+├── models/           # 预置 bge-small-zh-v1.5 向量模型
 ├── requirements.txt
-├── .env              # DeepSeek key、RAG_SERVICE_URL、RAG_DOC_ID
+├── .env              # DeepSeek key、ACCESS_PASSWORD 等
 └── frontend/         # Vue 3 + Vite 单页
+    ├── Dockerfile        # 前端镜像
+    ├── nginx.conf        # 反向代理 /api → 后端
     ├── src/App.vue       # 聊天界面 + Agent 过程折叠区
-    ├── src/api.js        # POST /api/chat
-    └── vite.config.js    # 代理 /api → localhost:8084
+    └── src/api.js        # POST /api/chat（SSE）
 ```
 
 ## 5. Agent Loop（核心流程）

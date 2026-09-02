@@ -1,9 +1,11 @@
+import json
+
 from llm import chat
 from rag.store import query as vector_query
-from config import TOP_K
+from config import TOP_K, SEARCH_MAX_DISTANCE
 
 
-def search_notes(query: str, top_k: int = None, max_distance: float = 0.6) -> str:
+def search_notes(query: str, top_k: int = None, max_distance: float = SEARCH_MAX_DISTANCE) -> str:
     if top_k is None:
         top_k = TOP_K
     try:
@@ -28,10 +30,24 @@ def search_notes(query: str, top_k: int = None, max_distance: float = 0.6) -> st
 
 
 def make_quiz(topic: str) -> str:
-    """动作型工具：让 DeepSeek 生成一道练习题。"""
+    """动作型工具：让 DeepSeek 生成一道练习题，并格式化为易读文本。"""
     prompt = (
         f"请根据主题「{topic}」出一道练习题，只输出 JSON："
         '{"question": "题目", "answer": "答案", "explain": "解析"}'
     )
-    result = chat([{"role": "user", "content": prompt}])
-    return result["choices"][0]["message"]["content"]
+    result = chat([{"role": "user", "content": prompt}])["choices"][0]["message"]["content"]
+    try:
+        # 兼容模型可能包裹的 ```json ... ``` 代码块
+        raw = result.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1] if "\n" in raw else raw
+            raw = raw.rsplit("\n", 1)[0] if "\n" in raw else raw
+            raw = raw.replace("```", "").strip()
+        data = json.loads(raw)
+        return (
+            f"题目：{data['question']}\n\n"
+            f"答案：{data['answer']}\n\n"
+            f"解析：{data['explain']}"
+        )
+    except Exception as e:
+        return f"生成练习题结果：\n{result}\n\n（格式化失败：{e}）"
