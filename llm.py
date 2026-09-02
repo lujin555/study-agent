@@ -10,7 +10,12 @@ load_dotenv()
 API_KEY = os.getenv("LLM_API_KEY")
 BASE_URL = os.getenv("LLM_BASE_URL")
 MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
-
+if not API_KEY:        # None 和 "" 都算"没配"（Python 里它们都为假）
+    raise RuntimeError("缺少 LLM_API_KEY：请把 .env.example 复制为 .env，填入你的 DeepSeek 密钥后重启")
+if not BASE_URL:
+    raise RuntimeError(
+        "缺少 LLM_BASE_URL：请在 .env 里设置，如 https://api.deepseek.com/v1"
+    )
 
 def _post(messages, tools=None, stream=False):
     """发送请求 + 指数退避重试（网络错误 / 429 / 5xx 会重试 3 次）。"""

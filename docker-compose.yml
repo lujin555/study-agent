@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: .
+    container_name: study-agent-backend
+    env_file:
+      - .env
+    
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./docs:/app/docs
+      - ./data:/app/data          # 改这里：挂目录
+    environment:
+      CHROMA_DB_PATH: /app/chroma_db
+      DOCS_DIR: /app/docs
+      DB_PATH: /app/data/chat.db  # 加这行：数据库放进挂载目录
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: study-agent-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

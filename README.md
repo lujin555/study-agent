@@ -47,6 +47,19 @@
 | `app.py` | 后端入口：/api/chat（流式）、/api/history |
 | `frontend/` | Vue 3 前端 |
 
+## Docker 部署
+
+已配置 `Dockerfile`、`frontend/Dockerfile`、`docker-compose.yml` 和 `nginx.conf`。首次构建前先下载向量模型：
+
+```bash
+python download_model.py
+docker compose up --build -d
+```
+
+- 前端：http://localhost:5173
+- 后端文档：http://localhost:8084/docs
+- 向量模型 `bge-small-zh-v1.5` 已预置在 `models/`，构建时打包进镜像，无需联网下载。
+
 ## 常见问题
 
 - 第一次启动为什么慢？启动时要加载本地向量化模型（bge），约 30 秒。

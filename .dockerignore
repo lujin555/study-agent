@@ -1,0 +1,21 @@
+.git
+.venv
+.venv2
+__pycache__
+*.pyc
+# 密钥不进镜像：通过 docker-compose 的 env_file 在运行时注入
+.env
+# 运行数据：运行时用 volume 挂载，不固化进镜像
+chroma_db
+docs
+chat.db
+# models 目录预置了 bge-small-zh-v1.5 向量模型，需要打包进后端镜像
+#（只忽略可能的本地 HuggingFace 缓存子目录）
+models/.cache
+# 前端交给 frontend/Dockerfile 单独构建，后端不需要
+frontend
+tests
+playground
+my_agent.py
+*.bat
+*.md

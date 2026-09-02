@@ -107,6 +107,7 @@ async function onFileSelected(event) {
   uploadStatus.value = `正在上传 ${file.name}...`;
   try {
     const res = await uploadDocument(file, conversationId.value);
+    if (res.code === 401) { onUnauthorized(); return; }
     if (res.code === 200) {
       uploadStatus.value = `${res.filename} 已入库 ${res.chunks} 块`;
       if (res.warning) {
@@ -181,6 +182,7 @@ function onUnauthorized() {
 async function loadHistoryAndShow() {
   try {
     const res = await loadHistory(conversationId.value);
+    if (res.code === 401) { onUnauthorized(); return; }
     if (res.code === 200) {
       messages.value = res.data.map(m => ({ role: m.role, content: m.content }));
       scrollToBottom();

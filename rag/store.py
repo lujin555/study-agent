@@ -12,11 +12,12 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 
-from config import CHROMA_DB_PATH
+from config import CHROMA_DB_PATH, EMBEDDING_MODEL_PATH
 
-# 嵌入函数：本地 sentence-transformers 模型，开箱即用
+# 嵌入函数：优先用本地模型路径，未设置则回退到 HuggingFace 名称
+_model_name_or_path = EMBEDDING_MODEL_PATH or "BAAI/bge-small-zh-v1.5"
 _ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-    model_name="BAAI/bge-small-zh-v1.5"
+    model_name=_model_name_or_path
 )
 
 

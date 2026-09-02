@@ -54,5 +54,6 @@ export async function uploadDocument(file, conversationId) {
     headers: { "Authorization": getToken() },  // 注意：不手动设 Content-Type，浏览器会自动带 multipart 边界
     body: form,
   });
+  if (res.status === 401) return { code: 401 };   // 令牌过期，交给页面处理
   return res.json();
 }

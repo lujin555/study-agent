@@ -1,8 +1,10 @@
 import secrets
+import time
+import io
 from fastapi import Depends, Header, HTTPException, UploadFile, File, Form
 from pathlib import Path
 from ingest import ingest_one
-from config import ACCESS_PASSWORD, DOCS_DIR
+from config import ACCESS_PASSWORD, DOCS_DIR, UPLOAD_MAX_BYTES
 import json
 from db import init_db, save_message, load_history
 
@@ -20,8 +22,9 @@ class ChatRequest(BaseModel):
 
 
 app = FastAPI(title="study-agent")
-# 简单的内存令牌表（重启失效，够用；生产换数据库）
-_tokens = set()
+# 简单的内存令牌表：重启失效 + 24h 过期（生产换数据库）
+_tokens = {}  # token -> 签发时间戳
+_TOKEN_TTL = 24 * 3600
 # 每个对话最近上传的文档（conversation_id -> 文件名），让"这内容"有指向
 _recent_uploads = {}
 
@@ -29,8 +32,13 @@ _recent_uploads = {}
 def _require_auth(authorization: str = Header(None)):
     if not ACCESS_PASSWORD:
         return  # 没设密码 = 不启用访问控制
-    if not authorization or authorization not in _tokens:
-        raise HTTPException(status_code=401, detail="需要登录")
+    now = time.time()
+    # 顺手清理过期令牌，避免集合无限膨胀
+    expired = [t for t, ts in _tokens.items() if now - ts > _TOKEN_TTL]
+    for t in expired:
+        _tokens.pop(t, None)
+    if not authorization or _tokens.get(authorization, 0) < now - _TOKEN_TTL:
+        raise HTTPException(status_code=401, detail="需要登录或令牌已过期")
 
 
 class LoginRequest(BaseModel):
@@ -41,7 +49,7 @@ class LoginRequest(BaseModel):
 async def login(req: LoginRequest):
     if not ACCESS_PASSWORD or req.password == ACCESS_PASSWORD:
         token = secrets.token_hex(16)
-        _tokens.add(token)
+        _tokens[token] = time.time()
         return {"code": 200, "token": token}
     raise HTTPException(status_code=401, detail="密码错误")
 @app.post("/api/upload")
@@ -52,12 +60,20 @@ async def upload(file: UploadFile = File(...), conversation_id: str = Form("defa
     if suffix not in {".pdf", ".doc", ".docx", ".txt"}:
         raise HTTPException(status_code=400, detail=f"不支持的文件格式: {suffix}")
 
+    # 流式读取并限制大小，避免超大文件一次性占满内存
+    buf = io.BytesIO()
+    total = 0
+    while chunk := await file.read(1024 * 1024):
+        total += len(chunk)
+        if total > UPLOAD_MAX_BYTES:
+            raise HTTPException(status_code=413, detail=f"文件太大，上限 {UPLOAD_MAX_BYTES // (1024*1024)}MB")
+        buf.write(chunk)
+
     docs_dir = Path(DOCS_DIR)
     docs_dir.mkdir(exist_ok=True)
     safe_name = Path(file.filename).name          # 防路径穿越：只取文件名
     dest = docs_dir / safe_name
-    content = await file.read()
-    dest.write_bytes(content)
+    dest.write_bytes(buf.getvalue())
 
     try:
         n = ingest_one(dest)
@@ -81,10 +97,11 @@ app.add_middleware(
 async def chat(req: ChatRequest, _: None = Depends(_require_auth)):
 
     def event_stream():
+        # 先读旧历史，再存当前问题：避免把同一条问题同时通过 history 和 question 两次喂给模型
+        history = load_history(req.conversation_id)
         save_message(req.conversation_id, "user", req.question)
         answer_parts = []
         try:
-            history = load_history(req.conversation_id)
             recent = _recent_uploads.get(req.conversation_id)
             if recent:
                 # 告诉模型"用户最近上传了这份文档"，让"这内容/这份文档"有指向

@@ -1,6 +1,6 @@
 import sqlite3
-
-DB_PATH = "chat.db"          # 数据库文件
+import os
+DB_PATH = os.getenv("DB_PATH", "chat.db")
 
 
 def init_db():
