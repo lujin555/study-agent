@@ -1,4 +1,5 @@
 import json
+import os
 
 from llm import chat
 from rag.store import hybrid_query
@@ -20,7 +21,7 @@ def search_notes(query: str, top_k: int = None, max_distance: float = SEARCH_MAX
             d = dists[i] if i < len(dists) else 0     # 拿这一条的距离
             if d > max_distance:                      # 太远 = 不够相关
                 continue                              # 过滤掉！
-            src = metas[i].get("source", "") if i < len(metas) else ""
+            src = os.path.basename(metas[i].get("source", "")) if i < len(metas) else ""
             parts.append(f"[片段{i + 1}] {c}（来源：{src}）")
         if not parts:
             return "没有检索到与问题足够相关的内容，换个说法试试，或先把资料拖进 docs/ 文件夹。"
