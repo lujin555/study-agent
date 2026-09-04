@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import Depends, Header, HTTPException, UploadFile, File, Form
 from pathlib import Path
 from ingest import ingest_one
+from rag.loader import ScanPDFError
 from config import ACCESS_PASSWORD, DOCS_DIR, UPLOAD_MAX_BYTES
 import json
 from db import init_db, save_message, load_history
@@ -84,6 +85,9 @@ async def upload(file: UploadFile = File(...), conversation_id: str = Form("defa
 
     try:
         n = ingest_one(dest)
+    except ScanPDFError as e:
+        # 扫描版不是系统错误：文件保留在 docs/，但明确告知内容没进知识库
+        return {"code": 200, "filename": safe_name, "chunks": 0, "warning": str(e)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"入库失败: {e}")
     _recent_uploads[conversation_id] = safe_name   # 记住"这个对话最近上传了谁"

@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from config import DOCS_DIR, CHUNK_SIZE, CHUNK_OVERLAP
-from rag.loader import load_document
+from rag.loader import load_document, ScanPDFError
 from rag.chunker import split_text
 from rag.store import store_chunks, get_collection
 
@@ -40,12 +40,20 @@ def main():
         return
 
     total = 0
+    scanned = []
     for f in files:
         try:
             total += ingest_one(f)
+        except ScanPDFError as e:
+            # 扫描版不算"失败"，但要显眼地提示：这份资料实际没进知识库
+            scanned.append(f.name)
+            print(f"  ⚠️  {e}")
         except Exception as e:
             print(f"  失败: {f.name} -> {e}")
+
     print(f"完成，共入库 {total} 块。")
+    if scanned:
+        print(f"另有 {len(scanned)} 份扫描版 PDF 未入库（无文字层）：{', '.join(scanned)}")
 
 
 if __name__ == "__main__":
