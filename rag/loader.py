@@ -1,4 +1,5 @@
-"""通用文档加载器：支持 PDF / DOCX / TXT"""
+"""通用文档加载器：支持 PDF / DOCX / TXT / Markdown"""
+import re
 from pathlib import Path
 
 import pymupdf as fitz  # fitz 是 PyMuPDF 的旧名，新版叫 pymupdf
@@ -40,8 +41,24 @@ def load_document(path: str) -> str:
         return _load_docx(path)
     elif suffix == ".txt":
         return _load_txt(path)
+    elif suffix == ".md":
+        return _load_md(path)
     else:
         raise ValueError(f"不支持的文件格式: {suffix}")
+
+
+# 图片语法：![](url) —— 图片内容不会进知识库，留着只是噪音
+_IMG_PATTERN = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# 行内链接 [文字](url) —— 保留"文字"，丢弃 URL（URL 对语义检索无意义且占长度）
+_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+
+
+def _load_md(path: str) -> str:
+    """读取 Markdown，去掉图片与链接 URL，保留标题/正文/代码块的语义内容"""
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    text = _IMG_PATTERN.sub("", text)
+    text = _LINK_PATTERN.sub(r"\1", text)
+    return text
 
 
 def inspect_pdf(path: str) -> dict:

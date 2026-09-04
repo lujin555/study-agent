@@ -59,7 +59,7 @@ async def upload(file: UploadFile = File(...), conversation_id: str = Form("defa
     if not file.filename:
         raise HTTPException(status_code=400, detail="没有文件名")
     suffix = Path(file.filename).suffix.lower()
-    if suffix not in {".pdf", ".doc", ".docx", ".txt"}:
+    if suffix not in {".pdf", ".doc", ".docx", ".txt", ".md"}:
         raise HTTPException(status_code=400, detail=f"不支持的文件格式: {suffix}")
 
     # 流式读取并限制大小，避免超大文件一次性占满内存

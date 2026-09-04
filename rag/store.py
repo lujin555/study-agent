@@ -20,13 +20,21 @@ _ef = embedding_functions.SentenceTransformerEmbeddingFunction(
     model_name=_model_name_or_path
 )
 
+# client 复用：chromadb 把已加载的 embedding function 缓存在 client 实例内部，
+# 每次新建 PersistentClient 都会重新初始化（实测首次 30~80s，期间还会尝试联网），
+# 导致入库每个文件都要付一次这个代价。这里按路径缓存 client，只在首次付一次。
+_clients = {}
+
 
 def _get_client(persist_path: str = None):
-    """获取 chromadb 持久化客户端"""
-    return chromadb.PersistentClient(
-        path=persist_path or CHROMA_DB_PATH,
-        settings=Settings(anonymized_telemetry=False),
-    )
+    """获取 chromadb 持久化客户端（同一路径复用同一个 client 实例）"""
+    key = persist_path or CHROMA_DB_PATH
+    if key not in _clients:
+        _clients[key] = chromadb.PersistentClient(
+            path=key,
+            settings=Settings(anonymized_telemetry=False),
+        )
+    return _clients[key]
 
 
 def _chunk_ids(collection_name: str, metas: list) -> list:

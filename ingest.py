@@ -7,7 +7,7 @@ from rag.chunker import split_text
 from rag.store import store_chunks, get_collection
 
 COLLECTION = "documents"
-SUPPORTED = {".pdf", ".doc", ".docx", ".txt"}
+SUPPORTED = {".pdf", ".doc", ".docx", ".txt", ".md"}
 
 
 def ingest_one(path: Path, collection_name: str = COLLECTION) -> int:
@@ -31,9 +31,10 @@ def ingest_one(path: Path, collection_name: str = COLLECTION) -> int:
 def main():
     docs_dir = Path(DOCS_DIR)
     docs_dir.mkdir(exist_ok=True)
+    # 递归扫描：docs/ 下可以有子目录分类存放资料（如 docs/CS-Notes/AI/xxx.md）
     files = [
-        p for p in docs_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in SUPPORTED
+        p for p in docs_dir.rglob("*")
+        if p.is_file() and p.suffix.lower() in SUPPORTED and not p.name.startswith(".")
     ]
     if not files:
         print(f"{docs_dir} 里没有文档。把 PDF/DOCX/TXT 拖进来，再运行本脚本。")

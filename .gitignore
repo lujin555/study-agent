@@ -6,7 +6,10 @@ __pycache__/
 node_modules/
 dist/
 .superpowers/
-docs/
+docs/*
+# 示例知识库（CS-Notes 开源技术笔记）随仓库分发，让项目开箱即用、评测可复现
+!docs/CS-Notes/
+.tmp-test-files/
 chroma_db/
 .idea/
 chat.db

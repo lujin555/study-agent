@@ -11,7 +11,7 @@
             <div class="header">
         <h2>学习助手 Agent</h2>
         <div class="header-actions">
-          <input ref="fileInput" type="file" accept=".pdf,.docx,.txt" style="display:none" @change="onFileSelected" />
+          <input ref="fileInput" type="file" accept=".pdf,.docx,.txt,.md" style="display:none" @change="onFileSelected" />
           <button @click="fileInput.click()" :disabled="loading">上传资料</button>
           <button @click="startNewChat">新对话</button>
         </div>
