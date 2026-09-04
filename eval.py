@@ -1,8 +1,9 @@
-"""RAG 评估：检索命中率 + 生成正确率 + 诚实拒绝率。"""
+"""RAG 评估：检索命中率 + 生成正确率 + 诚实拒绝率 + 消融实验。"""
 
 import agent
 from eval_questions import EVAL_QUESTIONS
 from rag.store import query as vector_query
+from llm import chat
 
 
 def eval_retrieval():
@@ -59,6 +60,44 @@ def eval_generation():
                 print(f"    实际: {answer[:120]}")
     print(f"生成正确率（资料有的）: {correct}/{have}")
     print(f"诚实拒绝率（资料没有的）: {honest}/{not_in_docs}")
+
+
+def llm_only(question: str) -> str:
+    """纯模型链路：不检索，直接凭模型自身知识回答。用于消融实验。"""
+    resp = chat([
+        {"role": "system", "content": "你是学习助理。直接回答用户问题，用中文，简明扼要。"},
+        {"role": "user", "content": question},
+    ])
+    return resp["choices"][0]["message"]["content"]
+
+
+def eval_ablation():
+    """消融实验：同一批资料内题，对比「有检索(RAG)」vs「纯模型」的正确率，量化 RAG 增量。
+
+    关键点：如果两条链路正确率几乎一样，说明当前评测集（通用技术知识）测不出 RAG 的
+    增量价值——因为模型本身就会这些知识。此时结论不是"RAG 没用"，而是"评测集太简单，
+    需要用私有/冷门/时效性资料才能测出 RAG 真正的价值"。
+    """
+    print("\n===== 消融实验（RAG 增量）=====")
+    rag_correct = 0
+    llm_correct = 0
+    total = 0
+    for q in EVAL_QUESTIONS:
+        if not q["expected"]:
+            continue  # 只测资料内题
+        total += 1
+        rag_ans = agent.run_agent(q["question"])["answer"]
+        llm_ans = llm_only(q["question"])
+        rag_ok = q["expected"] in rag_ans
+        llm_ok = q["expected"] in llm_ans
+        rag_correct += rag_ok
+        llm_correct += llm_ok
+        if rag_ok != llm_ok:
+            tag = "RAG 补上了" if rag_ok else "RAG 反而带偏了"
+            print(f"  [{tag}] {q['question']}")
+    print(f"有检索(RAG)正确率: {rag_correct}/{total}")
+    print(f"纯模型正确率:      {llm_correct}/{total}")
+    print(f"RAG 增量:          {rag_correct - llm_correct} 题")
 
 
 if __name__ == "__main__":
