@@ -44,7 +44,10 @@ def eval_generation():
             not_in_docs += 1
             # 判"诚实拒绝"：关键词命中即可。注意覆盖中文里常见的几种说法，
             # 否则模型明明拒答了、只因措辞不同（如"资料中没有提到" vs "资料里没有"）就被误判成幻觉。
-            refused = any(k in answer for k in [
+            # 先去 markdown 标记，避免 "资料中**没有**关于" 的 ** 打断关键词连续匹配。
+            import re
+            _clean = re.sub(r"[*_]", "", answer)
+            refused = any(k in _clean for k in [
                 "没有检索到", "没有找到", "没有相关", "没有关于",
                 "资料里没有", "资料中没有", "没有提到", "没有提及",
                 "无法基于", "无法根据", "无法从", "并没有", "不包含",
