@@ -23,3 +23,13 @@ SEARCH_MAX_DISTANCE = float(os.getenv("SEARCH_MAX_DISTANCE", "0.6"))
 # ===== 上传 =====
 # 单文件上限（字节），默认 50MB；环境变量可覆盖
 UPLOAD_MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", str(50 * 1024 * 1024)))
+
+# ===== OCR（扫描版 PDF）=====
+# 默认关闭：OCR 约 2 秒/页，会显著拖慢 ingest，只在确认要吃扫描件时开启
+OCR_ENABLED = os.getenv("OCR_ENABLED", "false").lower() in ("1", "true", "yes")
+# 置信度阈值：低于此值丢弃（解决"OCR 没看清"的错字）
+OCR_MIN_SCORE = float(os.getenv("OCR_MIN_SCORE", "0.5"))
+# 行长度阈值：短于此值丢弃。
+# 关键：置信度高 ≠ 内容有意义。E-R 图/手写残留的碎片（"一""n""5""秀S"）
+# 置信度常常也很高，但本身没有语义，只能靠长度兜底过滤。
+OCR_MIN_LINE_LEN = int(os.getenv("OCR_MIN_LINE_LEN", "2"))

@@ -20,7 +20,12 @@ RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 # ② 装项目依赖（国内 pip 镜像加速）
 COPY requirements.txt .
-RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 顺序陷阱：rapidocr 会顺带装 opencv-python，但它是带 GUI 的完整版，
+# 在 slim 镜像里 import 会报 "libxcb.so.1: cannot open shared object file"。
+# 必须在装完之后立刻换成无 GUI 的 headless 版（OCR 只用像素处理，不需要 GUI）。
+RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    && pip uninstall -y opencv-python \
+    && pip install opencv-python-headless==5.0.0.93 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # ③ 拷贝源码（models/bge-small-zh-v1.5 已预置在项目中，会一起打进镜像）
 

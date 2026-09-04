@@ -7,6 +7,10 @@ pydantic==2.13.5
 pytest==9.1.1
 httpx==0.28.1
 PyMuPDF==1.28.2
+# 扫描版 PDF 的 OCR 识别（默认关闭，配 OCR_ENABLED=true 启用）
+# 注意：rapidocr 会顺带拉 opencv-python（带 GUI，在 slim 镜像里 import 会崩），
+# Dockerfile 里装完会立刻把它换成 opencv-python-headless
+rapidocr==3.9.2
 chromadb==1.5.9
 langchain-text-splitters==1.1.2
 python-docx==1.2.0
