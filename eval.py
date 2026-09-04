@@ -2,26 +2,30 @@
 
 import agent
 from eval_questions import EVAL_QUESTIONS
-from rag.store import query as vector_query
+from rag.store import query as vector_query, hybrid_query
 from llm import chat
 
 
 def eval_retrieval():
-    """检索评估：不花钱。检查向量检索有没有把期望片段捞出来。"""
-    print("===== 检索评估 =====")
-    hits = 0
-    total = 0
-    for q in EVAL_QUESTIONS:
-        if q["expected_source"] is None:
-            continue  # 幻觉题没有期望来源，不参与检索评估
-        total += 1
-        r = vector_query("documents", q["question"], top_k=5)
-        chunks = r["documents"][0]
-        hit = any(q["expected"] in c for c in chunks)
-        hits += hit
-        if not hit:
-            print(f"  [漏检] {q['question']}（期望含: {q['expected']}）")
-    print(f"检索命中率: {hits}/{total}")
+    """检索评估：不花钱。对比纯向量 vs 混合检索（向量+BM25）的命中率。"""
+    print("===== 检索评估（纯向量 vs 混合检索）=====")
+    for label, fn in [("纯向量", vector_query), ("混合检索", hybrid_query)]:
+        hits = 0
+        total = 0
+        missed = []
+        for q in EVAL_QUESTIONS:
+            if q["expected_source"] is None:
+                continue  # 幻觉题没有期望来源，不参与检索评估
+            total += 1
+            r = fn("documents", q["question"], top_k=5)
+            chunks = r["documents"][0]
+            hit = any(q["expected"] in c for c in chunks)
+            hits += hit
+            if not hit:
+                missed.append(f"{q['question']}（期望含: {q['expected']}）")
+        print(f"{label}命中率: {hits}/{total}")
+        for m in missed:
+            print(f"  [漏检] {m}")
 
 
 def eval_generation():

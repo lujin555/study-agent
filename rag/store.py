@@ -13,6 +13,7 @@ from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 
 from config import CHROMA_DB_PATH, EMBEDDING_MODEL_PATH
+from rag.bm25 import BM25, rrf_fusion
 
 # 嵌入函数：优先用本地模型路径，未设置则回退到 HuggingFace 名称
 _model_name_or_path = EMBEDDING_MODEL_PATH or "BAAI/bge-small-zh-v1.5"
@@ -92,6 +93,48 @@ def query(
     if col is None:
         return None
     return col.query(query_texts=[question], n_results=top_k)
+
+
+def hybrid_query(
+    collection_name: str,
+    question: str,
+    top_k: int = 3,
+    persist_path: str = None,
+):
+    """混合检索：向量召回 + BM25 关键词召回，RRF 融合后取 top_k。
+
+    返回结构与 query() 一致，便于上层无感替换。
+    distances 字段：向量召回的块用真实向量距离；仅 BM25 召回的块给 0.0
+    （关键词精确命中，视为高相关，通过上层的距离阈值过滤）。
+    """
+    col = get_collection(collection_name, persist_path=persist_path)
+    if col is None:
+        return None
+
+    all_data = col.get(include=["documents", "metadatas"])
+    docs = all_data["documents"]
+    ids = all_data["ids"]
+    metas = all_data["metadatas"]
+    id2doc = dict(zip(ids, docs))
+    id2meta = dict(zip(ids, metas))
+
+    # ① 向量召回
+    vec = col.query(query_texts=[question], n_results=top_k)
+    vec_ids = vec["ids"][0]
+    vec_dist = dict(zip(vec["ids"][0], vec["distances"][0]))
+
+    # ② BM25 关键词召回
+    bm = BM25(docs)
+    bm_ids = [ids[i] for i in bm.top(question, top_k)]
+
+    # ③ RRF 融合
+    fused = rrf_fusion(vec_ids, bm_ids)[:top_k]
+
+    return {
+        "documents": [[id2doc[i] for i in fused]],
+        "metadatas": [[id2meta[i] for i in fused]],
+        "distances": [[vec_dist.get(i, 0.0) for i in fused]],
+    }
 
 
 def delete_collection(collection_name: str, persist_path: str = None) -> bool:

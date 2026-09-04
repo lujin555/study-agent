@@ -1,7 +1,7 @@
 import json
 
 from llm import chat
-from rag.store import query as vector_query
+from rag.store import hybrid_query
 from config import TOP_K, SEARCH_MAX_DISTANCE
 
 
@@ -9,7 +9,7 @@ def search_notes(query: str, top_k: int = None, max_distance: float = SEARCH_MAX
     if top_k is None:
         top_k = TOP_K
     try:
-        result = vector_query("documents", query, top_k=top_k)
+        result = hybrid_query("documents", query, top_k=top_k)
         if not result or not result.get("documents") or not result["documents"][0]:
             return "向量库还没有内容。请先把资料拖进 docs/ 文件夹，再运行 ingest.py。"
         chunks = result["documents"][0]
