@@ -38,9 +38,16 @@
       <div v-if="quiz" class="quiz-card">
         <p class="quiz-question">{{ quiz.question }}</p>
         <button v-for="(opt, key) in quiz.options" :key="key" class="quiz-option"
-                :class="{ selected: selected === key }" @click="selected = key">
+                :class="{ selected: selected === key, correct: answered && key === quiz.answer, wrong: answered && selected === key && key !== quiz.answer }"
+                :disabled="answered"
+                @click="chooseOption(key)">
           {{ key }}. {{ opt }}
         </button>
+        <p v-if="answered" class="quiz-feedback">
+          <template v-if="selected === quiz.answer">✅ 答对了！</template>
+          <template v-else>❌ 答错了，正确答案是 {{ quiz.answer }}</template>
+        </p>
+        <p v-if="answered && quiz.explain" class="quiz-explain">📖 {{ quiz.explain }}</p>
       </div>
       <form @submit.prevent="send">
         <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
@@ -67,6 +74,7 @@ const fileInput = ref(null);
 const uploadStatus = ref("");
 const quiz = ref(null);        // 当前显示的题目卡片
 const selected = ref(null);    // 用户选中的选项（A/B/C/D）
+const answered = ref(false);   // 是否已作答（true=交卷：锁定按钮+显示判定）
 
 // ===== 打字机：队列 + 定时器 =====
 const queue = ref([]);        // 排队等待显示的字
@@ -111,6 +119,12 @@ function startNewChat() {
   messages.value = [];          // 清屏
   quiz.value = null;            // 清掉题目卡片
   selected.value = null;
+  answered.value = false;       // 重置作答态
+}
+function chooseOption(key) {
+  if (answered.value) return;   // 已交卷则忽略（双重保险，disabled 已挡一层）
+  selected.value = key;         // 记录选中的选项
+  answered.value = true;        // 标记已作答 → 触发判定 + 锁定
 }
 async function onFileSelected(event) {
   const file = event.target.files[0];
@@ -145,7 +159,7 @@ async function send() {
       answer_start() { startTypewriter(); },          // 开始打字
       token(data) { queue.value.push(data); },        // 来的字进队列
       unauthorized() { onUnauthorized(); },           // 令牌失效 → 回登录页
-      quiz(data) { quiz.value = data; selected.value = null; },  // 收到题目 → 显示卡片
+      quiz(data) { quiz.value = data; selected.value = null; answered.value = false; },  // 收到题目 → 显示卡片（重置作答态）
       trace(data) {
         traces.push(data);                            // 攒起来，done 时挂到消息上
         status.value = "正在调用工具: " + data.tool;
@@ -225,6 +239,11 @@ h2 { margin-bottom: 12px; font-size: 18px; }
 .quiz-option { display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; color: #222 !important; }
 .quiz-option:hover { border-color: #4a90d9; }
 .quiz-option.selected { border-color: #4a90d9; background: #d6e6fa; color: #0a3a6b !important; }
+.quiz-option:disabled { cursor: not-allowed; opacity: 0.6; }
+.quiz-option.correct:disabled { background: #e6f6e6; border-color: #2e8b57; color: #1d5c39 !important; opacity: 1; }
+.quiz-option.wrong:disabled { background: #fdecea; border-color: #d93025; color: #8a1a11 !important; opacity: 1; }
+.quiz-feedback { margin-top: 10px; font-weight: 600; color: #222 !important; }
+.quiz-explain { margin-top: 6px; padding: 8px 10px; background: #f0f4f8; border-radius: 6px; font-size: 14px; line-height: 1.6; color: #333 !important; }
 .messages { min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .msg { margin-bottom: 10px; }
 .bubble { padding: 8px 12px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap; }
