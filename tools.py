@@ -31,10 +31,10 @@ def search_notes(query: str, top_k: int = None, max_distance: float = SEARCH_MAX
 
 
 def make_quiz(topic: str) -> str:
-    """动作型工具：让 DeepSeek 生成一道练习题，并格式化为易读文本。"""
+    """动作型工具：让 DeepSeek 出一道单选题，返回原始 JSON（前端渲染成卡片）。"""
     prompt = (
-        f"请根据主题「{topic}」出一道练习题，只输出 JSON："
-        '{"question": "题目", "answer": "答案", "explain": "解析"}'
+        f"请根据主题「{topic}」出一道单选题，只输出 JSON："
+        '{"question": "题目", "options": {"A": "选项1", "B": "选项2", "C": "选项3", "D": "选项4"}, "answer": "A", "explain": "解析"}'
     )
     result = chat([{"role": "user", "content": prompt}])["choices"][0]["message"]["content"]
     try:
@@ -45,10 +45,8 @@ def make_quiz(topic: str) -> str:
             raw = raw.rsplit("\n", 1)[0] if "\n" in raw else raw
             raw = raw.replace("```", "").strip()
         data = json.loads(raw)
-        return (
-            f"题目：{data['question']}\n\n"
-            f"答案：{data['answer']}\n\n"
-            f"解析：{data['explain']}"
-        )
+        # 校验字段齐全，然后返回原始 JSON 字符串（前端负责解析成卡片）
+        assert "question" in data and "options" in data and "answer" in data
+        return json.dumps(data, ensure_ascii=False)
     except Exception as e:
         return f"生成练习题结果：\n{result}\n\n（格式化失败：{e}）"

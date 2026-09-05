@@ -31,9 +31,16 @@
         <div v-if="status" class="msg assistant">
           <div class="bubble">{{ status }}</div>
         </div>
-        <div v-if="loading" class="msg assistant">
+      <div v-if="loading" class="msg assistant">
           <div class="bubble">思考中...</div>
         </div>
+      </div>
+      <div v-if="quiz" class="quiz-card">
+        <p class="quiz-question">{{ quiz.question }}</p>
+        <button v-for="(opt, key) in quiz.options" :key="key" class="quiz-option"
+                :class="{ selected: selected === key }" @click="selected = key">
+          {{ key }}. {{ opt }}
+        </button>
       </div>
       <form @submit.prevent="send">
         <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
@@ -58,6 +65,8 @@ const password = ref("");
 const loginError = ref("");
 const fileInput = ref(null);
 const uploadStatus = ref("");
+const quiz = ref(null);        // 当前显示的题目卡片
+const selected = ref(null);    // 用户选中的选项（A/B/C/D）
 
 // ===== 打字机：队列 + 定时器 =====
 const queue = ref([]);        // 排队等待显示的字
@@ -100,6 +109,8 @@ function startNewChat() {
   conversationId.value = crypto.randomUUID();
   localStorage.setItem("conversation_id", conversationId.value);
   messages.value = [];          // 清屏
+  quiz.value = null;            // 清掉题目卡片
+  selected.value = null;
 }
 async function onFileSelected(event) {
   const file = event.target.files[0];
@@ -134,6 +145,7 @@ async function send() {
       answer_start() { startTypewriter(); },          // 开始打字
       token(data) { queue.value.push(data); },        // 来的字进队列
       unauthorized() { onUnauthorized(); },           // 令牌失效 → 回登录页
+      quiz(data) { quiz.value = data; selected.value = null; },  // 收到题目 → 显示卡片
       trace(data) {
         traces.push(data);                            // 攒起来，done 时挂到消息上
         status.value = "正在调用工具: " + data.tool;
@@ -208,6 +220,11 @@ h2 { margin-bottom: 12px; font-size: 18px; }
 .login-hint { color: #888; margin-bottom: 12px; }
 .login input { max-width: 260px; margin: 0 auto 12px; display: block; }
 .error { color: #d33; margin-top: 10px; font-size: 14px; }
+.quiz-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px; margin-bottom: 12px; background: #fafcff; }
+.quiz-question { font-weight: 600; margin-bottom: 10px; line-height: 1.5; }
+.quiz-option { display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; }
+.quiz-option:hover { border-color: #4a90d9; }
+.quiz-option.selected { border-color: #4a90d9; background: #e8f1fb; }
 .messages { min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .msg { margin-bottom: 10px; }
 .bubble { padding: 8px 12px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap; }

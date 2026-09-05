@@ -9,7 +9,8 @@ SYSTEM_PROMPT = (
     "**引用来源**：回答时凡引用资料内容，都用 `[来源：xxx]` 的格式标注来源文档名，方便用户溯源核查。"
     "来源名**原样照抄** search_notes 返回结果里括号内的文档名，不要改动后缀"
     "（例如 GPT123.md 就写 GPT123.md，笔记.txt 就写 笔记.txt）。"
-    "用户要练习题时，调用 make_quiz。用中文。"
+    "只要用户要题目/练习题/出题/考考我（包括编程题，如'出一道C++题目'），必须调用 make_quiz 出题，"
+    "绝不要自己直接编写题目内容。用中文。"
 )
 
 TOOLS = [
@@ -32,7 +33,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "make_quiz",
-            "description": "根据主题生成一道练习题，含题目、答案和解析",
+            "description": "根据主题出一道单选题并返回 JSON（题目/4个选项/答案/解析）。只要用户表达出题意图（'出题/题目/练习题/考考我'，含编程题），必须调用本工具，不要自己写题",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -94,6 +95,14 @@ def run_agent_stream(question, history=None, max_rounds=5, max_history_items=20)
                 except json.JSONDecodeError:
                     args = {}
                 result = call_tool(name, args)
+                if name == "make_quiz":
+                    # 出题结果（JSON 字符串）单独发给前端，渲染成可点的题目卡片
+                    try:
+                        yield {"type": "quiz", "data": json.loads(result)}
+                        # 给模型看的工具结果换成中性提示：答案只进卡片，不经过模型的嘴
+                        result = "题目已生成并展示给用户。请提示用户在题目卡片上作答，不要复述题目或选项，也不要提前透露答案。"
+                    except Exception:
+                        pass  # 不是合法 JSON（比如出错信息），照常走 trace 就行
                 yield {"type": "trace", "data": {"tool": name, "arguments": args, "result_preview": result[:100]}}
                 messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
             continue
