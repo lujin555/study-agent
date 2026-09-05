@@ -8,7 +8,7 @@ from ingest import ingest_one
 from rag.loader import ScanPDFError
 from config import ACCESS_PASSWORD, DOCS_DIR, UPLOAD_MAX_BYTES
 import json
-from db import init_db, save_message, load_history
+from db import init_db, save_message, load_history, save_wrong_answer, list_wrong_answers
 
 init_db()
 
@@ -45,6 +45,16 @@ def _require_auth(authorization: str = Header(None)):
 
 class LoginRequest(BaseModel):
     password: str
+
+
+class WrongAnswerIn(BaseModel):
+    """存错题的请求体。options 是 dict（4 个选项）。"""
+    device_id: str
+    question: str
+    options: dict
+    your_answer: str
+    correct_answer: str
+    explain: str = ""
 
 
 @app.post("/api/login")
@@ -136,6 +146,25 @@ async def chat(req: ChatRequest, _: None = Depends(_require_auth)):
 @app.get("/api/history")
 async def history(conversation_id: str = "default", _: None = Depends(_require_auth)):
     return {"code": 200, "data": load_history(conversation_id, limit=100)}
+
+
+@app.post("/api/wrong-answers")
+async def add_wrong_answer(req: WrongAnswerIn, _: None = Depends(_require_auth)):
+    """存一道错题（答错时前端自动调用）。"""
+    try:
+        rid = save_wrong_answer(
+            req.device_id, req.question, req.options,
+            req.your_answer, req.correct_answer, req.explain,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"存错题失败: {e}")
+    return {"code": 200, "id": rid}
+
+
+@app.get("/api/wrong-answers")
+async def get_wrong_answers(device_id: str, _: None = Depends(_require_auth)):
+    """取某设备的错题列表（最新在前）。"""
+    return {"code": 200, "data": list_wrong_answers(device_id)}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8084)

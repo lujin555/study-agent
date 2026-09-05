@@ -19,7 +19,7 @@ if not BASE_URL:
 
 def _post(messages, tools=None, stream=False):
     """发送请求 + 指数退避重试（网络错误 / 429 / 5xx 会重试 3 次）。"""
-    payload = {"model": MODEL, "messages": messages}
+    payload = {"model": MODEL, "messages": messages, "temperature": 0.3}
     if stream:
         payload["stream"] = True
     if tools:

@@ -57,3 +57,35 @@ export async function uploadDocument(file, conversationId) {
   if (res.status === 401) return { code: 401 };   // 令牌过期，交给页面处理
   return res.json();
 }
+
+// ===== 错题本相关 =====
+
+// 生成/取固定的设备 ID：首次生成存 localStorage，之后每次读同一值 → "绑这台浏览器"
+export function getDeviceId() {
+  let id = localStorage.getItem("device_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("device_id", id);
+  }
+  return id;
+}
+
+// 存一道错题（答错时调用）
+export async function saveWrongAnswer(payload) {
+  const res = await fetch(`${BASE_URL}/wrong-answers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": getToken() },
+    body: JSON.stringify({ device_id: getDeviceId(), ...payload }),
+  });
+  if (res.status === 401) return { code: 401 };
+  return res.json();
+}
+
+// 查错题列表
+export async function fetchWrongAnswers() {
+  const res = await fetch(`${BASE_URL}/wrong-answers?device_id=${getDeviceId()}`, {
+    headers: { "Authorization": getToken() },
+  });
+  if (res.status === 401) return { code: 401 };
+  return res.json();
+}

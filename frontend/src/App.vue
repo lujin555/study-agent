@@ -13,6 +13,7 @@
         <div class="header-actions">
           <input ref="fileInput" type="file" accept=".pdf,.docx,.txt,.md" style="display:none" @change="onFileSelected" />
           <button @click="fileInput.click()" :disabled="loading">上传资料</button>
+          <button @click="toggleWrong">错题本{{ wrongList.length ? `(${wrongList.length})` : "" }}</button>
           <button @click="startNewChat">新对话</button>
         </div>
       </div>
@@ -49,6 +50,26 @@
         </p>
         <p v-if="answered && quiz.explain" class="quiz-explain">📖 {{ quiz.explain }}</p>
       </div>
+
+      <div v-if="showWrong" class="wrongbook">
+        <div class="wrongbook-head">
+          <span>📚 错题本（{{ wrongList.length }} 道）</span>
+          <button class="wrongbook-refresh" @click="loadWrongList" :disabled="wrongLoading">刷新</button>
+        </div>
+        <p v-if="wrongLoading" class="wrongbook-hint">加载中...</p>
+        <p v-else-if="!wrongList.length" class="wrongbook-hint">还没有错题。答错的题会自动记到这里，方便复习。</p>
+        <div v-for="w in wrongList" :key="w.id" class="wrong-item">
+          <p class="wrong-q">{{ w.question }}</p>
+          <div class="wrong-opts">
+            <span v-for="(txt, k) in w.options" :key="k"
+                  :class="['wrong-opt', k === w.correct_answer ? 'opt-correct' : '', k === w.your_answer && k !== w.correct_answer ? 'opt-wrong' : '']">
+              {{ k }}. {{ txt }}
+            </span>
+          </div>
+          <p class="wrong-result">你选了 {{ w.your_answer }}，正确答案 {{ w.correct_answer }}</p>
+          <p v-if="w.explain" class="wrong-explain">📖 {{ w.explain }}</p>
+        </div>
+      </div>
       <form @submit.prevent="send">
         <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
         <button :disabled="loading || !question.trim()">发送</button>
@@ -59,7 +80,7 @@
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { askAgent, loadHistory, login, getToken, uploadDocument } from "./api.js";
+import { askAgent, loadHistory, login, getToken, uploadDocument, saveWrongAnswer, fetchWrongAnswers } from "./api.js";
 
 const question = ref("");
 const messages = ref([]);
@@ -75,6 +96,9 @@ const uploadStatus = ref("");
 const quiz = ref(null);        // 当前显示的题目卡片
 const selected = ref(null);    // 用户选中的选项（A/B/C/D）
 const answered = ref(false);   // 是否已作答（true=交卷：锁定按钮+显示判定）
+const showWrong = ref(false);  // 错题本面板是否展开
+const wrongList = ref([]);     // 错题列表
+const wrongLoading = ref(false); // 拉取错题中
 
 // ===== 打字机：队列 + 定时器 =====
 const queue = ref([]);        // 排队等待显示的字
@@ -125,6 +149,29 @@ function chooseOption(key) {
   if (answered.value) return;   // 已交卷则忽略（双重保险，disabled 已挡一层）
   selected.value = key;         // 记录选中的选项
   answered.value = true;        // 标记已作答 → 触发判定 + 锁定
+  if (key !== quiz.value.answer) {
+    // 答错了 → 自动存进错题本（方便复习）；异步进行，不阻塞界面
+    saveWrongAnswer({
+      question: quiz.value.question,
+      options: quiz.value.options,
+      your_answer: key,
+      correct_answer: quiz.value.answer,
+      explain: quiz.value.explain || "",
+    }).then((res) => { if (res && res.code === 200) loadWrongList(); });
+  }
+}
+async function toggleWrong() {
+  showWrong.value = !showWrong.value;   // 翻转面板显隐
+  if (showWrong.value && !wrongList.value.length) loadWrongList();  // 首次展开时拉一次
+}
+async function loadWrongList() {
+  wrongLoading.value = true;
+  try {
+    const res = await fetchWrongAnswers();
+    if (res && res.code === 200) wrongList.value = res.data;
+  } finally {
+    wrongLoading.value = false;
+  }
 }
 async function onFileSelected(event) {
   const file = event.target.files[0];
@@ -244,6 +291,19 @@ h2 { margin-bottom: 12px; font-size: 18px; }
 .quiz-option.wrong:disabled { background: #fdecea; border-color: #d93025; color: #8a1a11 !important; opacity: 1; }
 .quiz-feedback { margin-top: 10px; font-weight: 600; color: #222 !important; }
 .quiz-explain { margin-top: 6px; padding: 8px 10px; background: #f0f4f8; border-radius: 6px; font-size: 14px; line-height: 1.6; color: #333 !important; }
+
+.wrongbook { margin-bottom: 12px; padding: 14px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafcff; color: #222 !important; }
+.wrongbook-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 10px; }
+.wrongbook-refresh { font-size: 13px; padding: 4px 10px; }
+.wrongbook-hint { color: #555 !important; font-size: 14px; padding: 8px 0; }
+.wrong-item { border-top: 1px solid #eee; padding: 10px 0; }
+.wrong-q { font-weight: 600; margin-bottom: 6px; line-height: 1.5; color: #111 !important; }
+.wrong-opts { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+.wrong-opt { padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; color: #333 !important; }
+.wrong-opt.opt-correct { background: #e6f6e6; border-color: #2e8b57; color: #1d5c39 !important; }
+.wrong-opt.opt-wrong { background: #fdecea; border-color: #d93025; color: #8a1a11 !important; }
+.wrong-result { font-size: 14px; font-weight: 600; color: #222 !important; }
+.wrong-explain { margin-top: 5px; padding: 6px 8px; background: #f0f4f8; border-radius: 6px; font-size: 13px; line-height: 1.5; color: #333 !important; }
 .messages { min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .msg { margin-bottom: 10px; }
 .bubble { padding: 8px 12px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap; }
