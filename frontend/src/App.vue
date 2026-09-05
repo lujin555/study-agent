@@ -220,11 +220,11 @@ h2 { margin-bottom: 12px; font-size: 18px; }
 .login-hint { color: #888; margin-bottom: 12px; }
 .login input { max-width: 260px; margin: 0 auto 12px; display: block; }
 .error { color: #d33; margin-top: 10px; font-size: 14px; }
-.quiz-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px; margin-bottom: 12px; background: #fafcff; }
-.quiz-question { font-weight: 600; margin-bottom: 10px; line-height: 1.5; }
-.quiz-option { display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; }
+.quiz-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 14px; margin-bottom: 12px; background: #fafcff; color: #222 !important; }
+.quiz-question { font-weight: 600; margin-bottom: 10px; line-height: 1.5; color: #111 !important; }
+.quiz-option { display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; color: #222 !important; }
 .quiz-option:hover { border-color: #4a90d9; }
-.quiz-option.selected { border-color: #4a90d9; background: #e8f1fb; }
+.quiz-option.selected { border-color: #4a90d9; background: #d6e6fa; color: #0a3a6b !important; }
 .messages { min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .msg { margin-bottom: 10px; }
 .bubble { padding: 8px 12px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap; }
