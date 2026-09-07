@@ -1,10 +1,15 @@
 """投件箱：把 docs/ 文件夹里的文档自动切块入库。"""
+import logging
 from pathlib import Path
 
 from config import DOCS_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 from rag.loader import load_document, ScanPDFError
 from rag.chunker import split_text
 from rag.store import store_chunks, get_collection
+from logging_setup import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 COLLECTION = "documents"
 SUPPORTED = {".pdf", ".doc", ".docx", ".txt", ".md"}
@@ -24,7 +29,7 @@ def ingest_one(path: Path, collection_name: str = COLLECTION) -> int:
         col.delete(where={"source": str(path)})
 
     n = store_chunks(chunks, collection_name=collection_name)
-    print(f"  入库 {n} 块: {path.name}")
+    logger.info(f"入库 {n} 块: {path.name}")
     return n
 
 
@@ -48,13 +53,13 @@ def main():
         except ScanPDFError as e:
             # 扫描版不算"失败"，但要显眼地提示：这份资料实际没进知识库
             scanned.append(f.name)
-            print(f"  ⚠️  {e}")
-        except Exception as e:
-            print(f"  失败: {f.name} -> {e}")
+            logger.warning(f"{e}")
+        except Exception:
+            logger.exception(f"失败: {f.name}")
 
-    print(f"完成，共入库 {total} 块。")
+    logger.info(f"完成，共入库 {total} 块。")
     if scanned:
-        print(f"另有 {len(scanned)} 份扫描版 PDF 未入库（无文字层）：{', '.join(scanned)}")
+        logger.warning(f"另有 {len(scanned)} 份扫描版 PDF 未入库（无文字层）：{', '.join(scanned)}")
 
 
 if __name__ == "__main__":

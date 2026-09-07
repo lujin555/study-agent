@@ -60,7 +60,7 @@ def main():
     observer = Observer()
     observer.schedule(DocsHandler(), str(docs_dir), recursive=False)
     observer.start()
-    print(f"正在监听 {docs_dir}（拖 PDF/DOCX/TXT 进来就自动入库，Ctrl+C 停止）")
+    logger.info(f"正在监听 {docs_dir}（拖 PDF/DOCX/TXT 进来就自动入库，Ctrl+C 停止）")
 
     try:
         while True:
