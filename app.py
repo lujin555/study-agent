@@ -1,4 +1,3 @@
-import secrets
 import time
 import io
 from datetime import datetime
@@ -10,6 +9,8 @@ from config import ACCESS_PASSWORD, DOCS_DIR, UPLOAD_MAX_BYTES
 import json
 from db import init_db, save_message, load_history, save_wrong_answer, list_wrong_answers
 from logging_setup import setup_logging
+import hmac, hashlib
+
 setup_logging()
 
 init_db()
@@ -27,22 +28,33 @@ class ChatRequest(BaseModel):
 
 
 app = FastAPI(title="study-agent")
-# 简单的内存令牌表：重启失效 + 24h 过期（生产换数据库）
-_tokens = {}  # token -> 签发时间戳
-_TOKEN_TTL = 24 * 3600
 # 每个对话最近上传的文档（conversation_id -> 文件名），让"这内容"有指向
 _recent_uploads = {}
+
+# ---- 无状态签名令牌：服务器不存任何东西，重启后依然有效（迷你 JWT 思想）----
+_TOKEN_TTL = 24 * 3600
+_AUTH_SECRET = (ACCESS_PASSWORD or "study-agent-local").encode()
+
+def _make_token() -> str:
+    ts = str(int(time.time()))
+    sig = hmac.new(_AUTH_SECRET, ts.encode(), hashlib.sha256).hexdigest()
+    return f"{ts}.{sig}"
+
+def _check_token(token: str) -> bool:
+    try:
+        ts, sig = token.split(".")
+    except ValueError:
+        return False
+    if time.time() - int(ts) > _TOKEN_TTL:
+        return False
+    expect = hmac.new(_AUTH_SECRET, ts.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expect)
 
 
 def _require_auth(authorization: str = Header(None)):
     if not ACCESS_PASSWORD:
         return  # 没设密码 = 不启用访问控制
-    now = time.time()
-    # 顺手清理过期令牌，避免集合无限膨胀
-    expired = [t for t, ts in _tokens.items() if now - ts > _TOKEN_TTL]
-    for t in expired:
-        _tokens.pop(t, None)
-    if not authorization or _tokens.get(authorization, 0) < now - _TOKEN_TTL:
+    if not authorization or not _check_token(authorization):
         raise HTTPException(status_code=401, detail="需要登录或令牌已过期")
 
 
@@ -68,9 +80,7 @@ class QuizRequest(BaseModel):
 @app.post("/api/login")
 async def login(req: LoginRequest):
     if not ACCESS_PASSWORD or req.password == ACCESS_PASSWORD:
-        token = secrets.token_hex(16)
-        _tokens[token] = time.time()
-        return {"code": 200, "token": token}
+        return {"code": 200, "token": _make_token()}
     raise HTTPException(status_code=401, detail="密码错误")
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...), conversation_id: str = Form("default"), _: None = Depends(_require_auth)):
