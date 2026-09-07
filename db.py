@@ -8,6 +8,10 @@ DB_PATH = os.getenv("DB_PATH", "chat.db")
 def init_db():
     """建表（第一次运行时调用）"""
     conn = sqlite3.connect(DB_PATH)
+    # WAL 模式：读写不互斥，避免偶发 "database is locked"。
+    # 单用户下每次调用新建连接的开销可忽略（SQLite 本地 IPC < 1ms），
+    # 不上连接池是刻意的取舍：少一层状态管理，重启/多进程无残留。
+    conn.execute("PRAGMA journal_mode=WAL")
     cur = conn.cursor()
     cur.execute("""CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

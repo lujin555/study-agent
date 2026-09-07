@@ -55,18 +55,26 @@ def chat(messages, tools=None):
 
 
 def chat_stream(messages, tools=None):
-    """流式版 chat：用 stream=True，逐个 yield 回答的文字片段。"""
+    """流式版 chat：用 stream=True，逐个 yield 回答的文字片段。
+
+    finally 里 resp.close() 是中断生成的关键：当客户端断开 SSE 连接时，
+    上游生成器被 close() → GeneratorExit 传到这里 → resp.close() 切掉 DeepSeek 流，
+    避免模型继续算没人看的 token。
+    """
     resp = _post(messages, tools, stream=True)
-    for line in resp.iter_lines():
-        if not line or not line.startswith(b"data:"):
-            continue
-        data = line[5:].strip()
-        if data == b"[DONE]":
-            break
-        try:
-            delta = json.loads(data)["choices"][0]["delta"]
-        except Exception:
-            continue
-        content = delta.get("content")
-        if content:
-            yield content
+    try:
+        for line in resp.iter_lines():
+            if not line or not line.startswith(b"data:"):
+                continue
+            data = line[5:].strip()
+            if data == b"[DONE]":
+                break
+            try:
+                delta = json.loads(data)["choices"][0]["delta"]
+            except Exception:
+                continue
+            content = delta.get("content")
+            if content:
+                yield content
+    finally:
+        resp.close()   # 客户端断开时关掉上游 HTTP 连接，DeepSeek 流不再继续

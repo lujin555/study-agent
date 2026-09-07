@@ -1,0 +1,14 @@
+[run]
+source = .
+omit =
+    .venv/*
+    frontend/*
+    tests/*
+    download_model.py
+    eval*.py
+    my_agent.py
+
+[report]
+exclude_lines =
+    if __name__ == .__main__.:
+    pragma: no cover

@@ -108,8 +108,12 @@ def run_agent_stream(question, history=None, max_rounds=5, max_history_items=20)
             continue
 
         yield {"type": "answer_start"}
-        for piece in chat_stream(messages):
-            yield {"type": "token", "data": piece}
+        stream = chat_stream(messages)
+        try:
+            for piece in stream:
+                yield {"type": "token", "data": piece}
+        finally:
+            stream.close()   # 上层 close() 时级联关掉 chat_stream → resp.close()
         yield {"type": "done"}
         return
 

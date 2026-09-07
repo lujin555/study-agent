@@ -16,10 +16,10 @@ SUPPORTED = {".pdf", ".doc", ".docx", ".txt", ".md"}
 
 
 def ingest_one(path: Path, collection_name: str = COLLECTION) -> int:
-    print(f"读取: {path.name}")
+    logger.info(f"读取: {path.name}")
     text = load_document(str(path))
     if not text.strip():
-        print(f"  跳过（没有文字内容）: {path.name}")
+        logger.info(f"跳过（没有文字内容）: {path.name}")
         return 0
 
     chunks = split_text(text, str(path), CHUNK_SIZE, CHUNK_OVERLAP)
@@ -42,7 +42,7 @@ def main():
         if p.is_file() and p.suffix.lower() in SUPPORTED and not p.name.startswith(".")
     ]
     if not files:
-        print(f"{docs_dir} 里没有文档。把 PDF/DOCX/TXT 拖进来，再运行本脚本。")
+        logger.info(f"{docs_dir} 里没有文档。把 PDF/DOCX/TXT 拖进来，再运行本脚本。")
         return
 
     total = 0

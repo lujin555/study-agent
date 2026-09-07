@@ -140,14 +140,16 @@ async def chat(req: ChatRequest, _: None = Depends(_require_auth)):
         history = load_history(req.conversation_id)
         save_message(req.conversation_id, "user", req.question)
         answer_parts = []
+        gen = None
         try:
             recent = _recent_uploads.get(req.conversation_id)
             if recent:
-                # 告诉模型"用户最近上传了这份文档"，让"这内容/这份文档"有指向
+                # 告诉模型"用户最近上传了这份文档"，让"这内容"有指向
                 history = [
                     {"role": "system", "content": f"用户最近上传了文档「{recent}」。如果用户问'这内容/这份文档/刚上传的'，指的是这份文档。"}
                 ] + history
-            for e in run_agent_stream(req.question, history=history):
+            gen = run_agent_stream(req.question, history=history)
+            for e in gen:
                 if e["type"] == "token":
                     answer_parts.append(e["data"])
                 yield "data: " + json.dumps(e, ensure_ascii=False) + "\n\n"
@@ -155,6 +157,10 @@ async def chat(req: ChatRequest, _: None = Depends(_require_auth)):
             yield "data: " + json.dumps({"type": "error", "data": f"生成回答时出错: {e}"},
                                         ensure_ascii=False) + "\n\n"
         finally:
+            # 客户端断开（点"停止"或关页面）时 Starlette close() 本生成器，
+            # GeneratorExit 传到这里 → gen.close() 级联关掉 agent → llm → resp.close()
+            if gen is not None:
+                gen.close()
             if answer_parts:
                 save_message(req.conversation_id, "assistant", "".join(answer_parts))
 

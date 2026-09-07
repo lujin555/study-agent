@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,8 +10,20 @@ CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
 DOCS_DIR = os.getenv("DOCS_DIR", "docs")
 
 # ===== 向量模型 =====
-# 设置本地路径时，优先加载该目录下的模型；空字符串则回退到 HuggingFace 名称
-EMBEDDING_MODEL_PATH = os.getenv("EMBEDDING_MODEL_PATH", "")
+# 优先级：环境变量 EMBEDDING_MODEL_PATH > 自动探测 models/ 目录 > HuggingFace 在线名
+# 自动探测让 pip install && pytest 开箱即用：跑过 download_model.py 后无需手动配路径
+def _detect_local_model():
+    """探测 models/ 下已下载的向量模型，避免回退到联网加载卡住。"""
+    root = Path(__file__).parent
+    for candidate in [
+        root / "models" / "bge-small-zh-v1.5",               # Dockerfile 路径 / 手动放置
+        root / "models" / "BAAI" / "bge-small-zh-v1.5",        # download_model.py 路径
+    ]:
+        if (candidate / "model.safetensors").exists():
+            return str(candidate)
+    return ""
+
+EMBEDDING_MODEL_PATH = os.getenv("EMBEDDING_MODEL_PATH", "") or _detect_local_model()
 
 # ===== 切块参数 =====
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))

@@ -55,8 +55,9 @@
       </div>
 
       <form @submit.prevent="send">
-        <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
-        <button :disabled="loading || !question.trim()">发送</button>
+        <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" :disabled="loading" />
+        <button v-if="!loading" :disabled="!question.trim()">发送</button>
+        <button v-else type="button" @click="stopGeneration" class="stop-btn">停止</button>
       </form>
       </template>
 
@@ -128,6 +129,7 @@ const quizLoading = ref(false); // 出题请求中
 const queue = ref([]);        // 排队等待显示的字
 let timer = null;             // 定时器 id
 let currentMsg = null;        // 正在"打字"的那条消息
+let abortController = null;   // SSE 中断控制器（点"停止"时 abort）
 
 function flushQueue() {
   // done 来了：队列里剩下的字一次全显示，停表
@@ -171,6 +173,12 @@ function startNewChat() {
   quiz.value = null;            // 清掉题目卡片
   selected.value = null;
   answered.value = false;       // 重置作答态
+}
+function stopGeneration() {
+  if (abortController) {
+    abortController.abort();     // 切断 SSE → 后端级联关闭 DeepSeek 流
+    abortController = null;
+  }
 }
 function chooseOption(key) {
   if (answered.value) return;   // 已交卷则忽略（双重保险，disabled 已挡一层）
@@ -262,6 +270,7 @@ async function send() {
   messages.value.push({ role: "user", content: q });
   scrollToBottom();
   question.value = "";
+  abortController = new AbortController();
   try {
     const traces = [];                                  // 攒工具过程
     await askAgent(q, conversationId.value, {
@@ -288,11 +297,19 @@ async function send() {
         }
         loading.value = false;
       },
-    });
+      aborted() {                                     // 用户点"停止" → 保留已生成的部分
+        flushQueue();
+        if (currentMsg) currentMsg.trace = traces;
+        status.value = "";
+        loading.value = false;
+      },
+    }, abortController.signal);
   } catch (e) {
     flushQueue(); status.value = "";
     messages.value.push({ role: "assistant", content: "请求失败，请确认后端已启动" });
     loading.value = false;
+  } finally {
+    abortController = null;
   }
 }
 async function doLogin() {
@@ -387,4 +404,6 @@ form { display: flex; gap: 8px; }
 input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
 button { padding: 10px 18px; border: none; background: #4a90d9; color: #fff; border-radius: 6px; cursor: pointer; }
 button:disabled { opacity: 0.5; }
+.stop-btn { background: #e74c3c; }
+.stop-btn:hover { background: #c0392b; }
 </style>
