@@ -17,3 +17,4 @@ test.db
 # 向量模型体积约 100MB，首次构建前运行 python download_model.py 下载
 models/
 logs/
+my_agent.py

@@ -1,4 +1,5 @@
 """投件箱自动监听：拖文件进 docs/ 就自动入库，不用再手动跑 ingest.py。"""
+import logging
 import time
 from pathlib import Path
 
@@ -7,6 +8,10 @@ from watchdog.observers import Observer
 
 from config import DOCS_DIR
 from ingest import ingest_one
+from logging_setup import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 SUPPORTED = {".pdf", ".doc", ".docx", ".txt"}
 
@@ -37,12 +42,12 @@ class DocsHandler(FileSystemEventHandler):
         if not (path.is_file() and path.suffix.lower() in SUPPORTED):
             return
         if not self._wait_for_stable_size(path):
-            print(f"文件大小一直不稳定或超时，跳过: {path.name}")
+            logger.warning(f"文件大小一直不稳定或超时，跳过: {path.name}")
             return
         try:
             ingest_one(path)
-        except Exception as e:
-            print(f"自动入库失败: {path.name} -> {e}")
+        except Exception:
+            logger.exception(f"自动入库失败: {path.name}")
 
     def on_created(self, event):
         # 复制/保存进文件夹触发 created
