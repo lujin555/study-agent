@@ -89,3 +89,14 @@ export async function fetchWrongAnswers() {
   if (res.status === 401) return { code: 401 };
   return res.json();
 }
+
+// ===== 直连出题（点"出题"按钮）=====
+export async function generateQuiz(topic) {
+  const res = await fetch(`${BASE_URL}/quiz`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": getToken() },
+    body: JSON.stringify({ topic }),
+  });
+  if (res.status === 401) return { code: 401 };
+  return res.json();
+}

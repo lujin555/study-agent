@@ -13,10 +13,13 @@
         <div class="header-actions">
           <input ref="fileInput" type="file" accept=".pdf,.docx,.txt,.md" style="display:none" @change="onFileSelected" />
           <button @click="fileInput.click()" :disabled="loading">上传资料</button>
-          <button @click="toggleWrong">错题本{{ wrongList.length ? `(${wrongList.length})` : "" }}</button>
-          <button @click="startNewChat">新对话</button>
+          <button @click="openQuizBox" :disabled="loading || view !== 'chat'">出题</button>
+          <button v-if="view === 'chat'" @click="openWrongBook">错题本{{ wrongList.length ? `(${wrongList.length})` : "" }}</button>
+          <button v-else @click="goChat">← 返回聊天</button>
+          <button v-if="view === 'chat'" @click="startNewChat">新对话</button>
         </div>
       </div>
+      <template v-if="view === 'chat'">
       <p v-if="uploadStatus" class="upload-status">{{ uploadStatus }}</p>
       <div ref="messagesBox" class="messages">
         <div v-for="(m, i) in messages" :key="i" :class="['msg', m.role]">
@@ -51,7 +54,14 @@
         <p v-if="answered && quiz.explain" class="quiz-explain">📖 {{ quiz.explain }}</p>
       </div>
 
-      <div v-if="showWrong" class="wrongbook">
+      <form @submit.prevent="send">
+        <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
+        <button :disabled="loading || !question.trim()">发送</button>
+      </form>
+      </template>
+
+      <!-- 错题本独立界面 -->
+      <div v-if="view === 'wrong'" class="wrongbook-page">
         <div class="wrongbook-head">
           <span>📚 错题本（{{ wrongList.length }} 道）</span>
           <button class="wrongbook-refresh" @click="loadWrongList" :disabled="wrongLoading">刷新</button>
@@ -70,17 +80,28 @@
           <p v-if="w.explain" class="wrong-explain">📖 {{ w.explain }}</p>
         </div>
       </div>
-      <form @submit.prevent="send">
-        <input v-model="question" placeholder="输入学习问题，如：计算机网络第三章讲了什么重点？" />
-        <button :disabled="loading || !question.trim()">发送</button>
-      </form>
+
+      <!-- 出题主题弹框 -->
+      <div v-if="showQuizBox" class="quiz-box-mask" @click.self="closeQuizBox">
+        <div class="quiz-box">
+          <h3>出题</h3>
+          <p class="quiz-box-tip">输入想考的主题，如"C++ 多态"、"TCP 三次握手"</p>
+          <input v-model="quizTopic" placeholder="输入出题主题" @keyup.enter="confirmQuiz" :disabled="quizLoading" />
+          <div class="quiz-box-actions">
+            <button @click="closeQuizBox" :disabled="quizLoading">取消</button>
+            <button @click="confirmQuiz" :disabled="quizLoading || !quizTopic.trim()">
+              {{ quizLoading ? "出题中..." : "出题" }}
+            </button>
+          </div>
+        </div>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { askAgent, loadHistory, login, getToken, uploadDocument, saveWrongAnswer, fetchWrongAnswers } from "./api.js";
+import { askAgent, loadHistory, login, getToken, uploadDocument, saveWrongAnswer, fetchWrongAnswers, generateQuiz } from "./api.js";
 
 const question = ref("");
 const messages = ref([]);
@@ -96,9 +117,12 @@ const uploadStatus = ref("");
 const quiz = ref(null);        // 当前显示的题目卡片
 const selected = ref(null);    // 用户选中的选项（A/B/C/D）
 const answered = ref(false);   // 是否已作答（true=交卷：锁定按钮+显示判定）
-const showWrong = ref(false);  // 错题本面板是否展开
+const view = ref("chat");      // 当前视图：'chat'=聊天 | 'wrong'=错题本（独立界面）
 const wrongList = ref([]);     // 错题列表
 const wrongLoading = ref(false); // 拉取错题中
+const showQuizBox = ref(false); // 出题主题弹框是否显示
+const quizTopic = ref("");     // 出题弹框里输入的主题
+const quizLoading = ref(false); // 出题请求中
 
 // ===== 打字机：队列 + 定时器 =====
 const queue = ref([]);        // 排队等待显示的字
@@ -136,6 +160,9 @@ function scrollToBottom() {
     messagesBox.value.scrollTop = messagesBox.value.scrollHeight;
   }
 }
+function scrollToTop() {
+  window.scrollTo(0, 0);   // 切视图时回到页面顶部
+}
 function startNewChat() {
   if (loading.value) return;    // 正在回答时禁止切换，防止流写进已清空的列表
   conversationId.value = crypto.randomUUID();
@@ -160,9 +187,44 @@ function chooseOption(key) {
     }).then((res) => { if (res && res.code === 200) loadWrongList(); });
   }
 }
-async function toggleWrong() {
-  showWrong.value = !showWrong.value;   // 翻转面板显隐
-  if (showWrong.value && !wrongList.value.length) loadWrongList();  // 首次展开时拉一次
+async function openWrongBook() {
+  view.value = "wrong";          // 切到错题本整页视图
+  if (!wrongList.value.length) loadWrongList();   // 首次进入拉一次
+  scrollToTop();
+}
+function goChat() {
+  view.value = "chat";           // 返回聊天视图
+}
+function openQuizBox() {
+  quizTopic.value = "";
+  showQuizBox.value = true;      // 弹出出题主题输入框
+}
+function closeQuizBox() {
+  if (quizLoading.value) return; // 出题中禁止关闭
+  showQuizBox.value = false;
+}
+async function confirmQuiz() {
+  const topic = quizTopic.value.trim();
+  if (!topic || quizLoading.value) return;
+  quizLoading.value = true;
+  try {
+    const res = await generateQuiz(topic);
+    if (res && res.code === 401) { onUnauthorized(); return; }
+    if (res && res.code === 200 && res.data) {
+      showQuizBox.value = false;
+      quiz.value = res.data;            // 直接渲染成题目卡片
+      selected.value = null;
+      answered.value = false;
+      view.value = "chat";              // 回到聊天视图看题
+      scrollToBottom();
+    } else {
+      alert(res?.detail || "出题失败，请稍后再试");
+    }
+  } catch (e) {
+    alert("出题失败：" + e.message);
+  } finally {
+    quizLoading.value = false;
+  }
 }
 async function loadWrongList() {
   wrongLoading.value = true;
@@ -292,11 +354,12 @@ h2 { margin-bottom: 12px; font-size: 18px; }
 .quiz-feedback { margin-top: 10px; font-weight: 600; color: #222 !important; }
 .quiz-explain { margin-top: 6px; padding: 8px 10px; background: #f0f4f8; border-radius: 6px; font-size: 14px; line-height: 1.6; color: #333 !important; }
 
-.wrongbook { margin-bottom: 12px; padding: 14px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafcff; color: #222 !important; }
+.wrongbook-page { padding: 4px 2px; color: #222 !important; }
+.wrongbook-page .wrongbook-head { font-size: 18px; padding: 8px 0 14px; border-bottom: 1px solid #eee; }
 .wrongbook-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 10px; }
 .wrongbook-refresh { font-size: 13px; padding: 4px 10px; }
 .wrongbook-hint { color: #555 !important; font-size: 14px; padding: 8px 0; }
-.wrong-item { border-top: 1px solid #eee; padding: 10px 0; }
+.wrong-item { border-bottom: 1px solid #eee; padding: 14px 0; }
 .wrong-q { font-weight: 600; margin-bottom: 6px; line-height: 1.5; color: #111 !important; }
 .wrong-opts { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
 .wrong-opt { padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; color: #333 !important; }
@@ -304,6 +367,14 @@ h2 { margin-bottom: 12px; font-size: 18px; }
 .wrong-opt.opt-wrong { background: #fdecea; border-color: #d93025; color: #8a1a11 !important; }
 .wrong-result { font-size: 14px; font-weight: 600; color: #222 !important; }
 .wrong-explain { margin-top: 5px; padding: 6px 8px; background: #f0f4f8; border-radius: 6px; font-size: 13px; line-height: 1.5; color: #333 !important; }
+.quiz-box-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.quiz-box { background: #fff; border-radius: 10px; padding: 20px; width: 340px; max-width: 90vw; box-shadow: 0 8px 30px rgba(0,0,0,0.2); color: #222 !important; }
+.quiz-box h3 { margin-bottom: 8px; color: #111 !important; }
+.quiz-box-tip { font-size: 13px; color: #555 !important; margin-bottom: 10px; }
+.quiz-box input { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; margin-bottom: 14px; color: #222 !important; }
+.quiz-box-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.quiz-box-actions button { padding: 6px 14px; }
+.quiz-box-actions button:first-child { background: #eee; color: #333; }
 .messages { min-height: 320px; max-height: 60vh; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .msg { margin-bottom: 10px; }
 .bubble { padding: 8px 12px; border-radius: 8px; line-height: 1.6; white-space: pre-wrap; }

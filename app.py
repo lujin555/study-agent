@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from agent import run_agent, run_agent_stream
+from tools import make_quiz
 
 class ChatRequest(BaseModel):
     question: str
@@ -55,6 +56,11 @@ class WrongAnswerIn(BaseModel):
     your_answer: str
     correct_answer: str
     explain: str = ""
+
+
+class QuizRequest(BaseModel):
+    """点'出题'按钮时的请求体：只要主题。"""
+    topic: str
 
 
 @app.post("/api/login")
@@ -165,6 +171,21 @@ async def add_wrong_answer(req: WrongAnswerIn, _: None = Depends(_require_auth))
 async def get_wrong_answers(device_id: str, _: None = Depends(_require_auth)):
     """取某设备的错题列表（最新在前）。"""
     return {"code": 200, "data": list_wrong_answers(device_id)}
+
+
+@app.post("/api/quiz")
+async def gen_quiz(req: QuizRequest, _: None = Depends(_require_auth)):
+    """点'出题'按钮直连出题：不走 agent 工具调用，保证 100% 出题。"""
+    if not req.topic.strip():
+        raise HTTPException(status_code=400, detail="主题不能为空")
+    try:
+        raw = make_quiz(req.topic.strip())   # 返回 JSON 字符串（或出错信息）
+        data = json.loads(raw)               # 解析成对象返回前端
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail=f"出题失败：{raw[:200]}")
+    return {"code": 200, "data": data}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8084)
