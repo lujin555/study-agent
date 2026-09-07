@@ -9,6 +9,8 @@ from rag.loader import ScanPDFError
 from config import ACCESS_PASSWORD, DOCS_DIR, UPLOAD_MAX_BYTES
 import json
 from db import init_db, save_message, load_history, save_wrong_answer, list_wrong_answers
+from logging_setup import setup_logging
+setup_logging()
 
 init_db()
 
