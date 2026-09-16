@@ -13,6 +13,9 @@ services:
       CHROMA_DB_PATH: /app/chroma_db
       DOCS_DIR: /app/docs
       DB_PATH: /app/data/chat.db  # 加这行：数据库放进挂载目录
+    dns:                          # 固定公共 DNS：绕开系统代理 fake-IP 污染（20.20.20.20）
+      - 223.5.5.5
+      - 119.29.29.29
     ports:
       - "8084:8084"
     restart: unless-stopped
