@@ -9,6 +9,8 @@ __pycache__
 chroma_db
 docs
 chat.db
+# 日志是运行期产物，不该固化进镜像（否则每次新建容器都会"复活"一份旧日志）
+logs
 # models 目录预置了 bge-small-zh-v1.5 向量模型，需要打包进后端镜像
 #（只忽略可能的本地 HuggingFace 缓存子目录）
 models/.cache

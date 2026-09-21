@@ -8,7 +8,6 @@ from rag.chunker import split_text
 from rag.store import store_chunks, get_collection
 from logging_setup import setup_logging
 
-setup_logging()
 logger = logging.getLogger(__name__)
 
 COLLECTION = "documents"
@@ -34,6 +33,7 @@ def ingest_one(path: Path, collection_name: str = COLLECTION) -> int:
 
 
 def main():
+    setup_logging()   # 只在当作脚本运行时配置日志；被 import 时不碰全局配置
     docs_dir = Path(DOCS_DIR)
     docs_dir.mkdir(exist_ok=True)
     # 递归扫描：docs/ 下可以有子目录分类存放资料（如 docs/CS-Notes/AI/xxx.md）
