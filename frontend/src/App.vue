@@ -102,7 +102,7 @@
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { askAgent, loadHistory, login, getToken, uploadDocument, saveWrongAnswer, fetchWrongAnswers, generateQuiz } from "./api.js";
+import { askAgent, loadHistory, login, isTokenValid, uploadDocument, saveWrongAnswer, fetchWrongAnswers, generateQuiz } from "./api.js";
 
 const question = ref("");
 const messages = ref([]);
@@ -110,7 +110,7 @@ const loading = ref(false);
 const conversationId = ref(localStorage.getItem("conversation_id") || crypto.randomUUID());
 localStorage.setItem("conversation_id", conversationId.value);
 const status = ref("");       // "正在查资料…"之类的过程提示
-const authed = ref(!!getToken());   // 有没有登录令牌
+const authed = ref(isTokenValid());   // token 存在且未过期（之前只判存在，过期 token 也算"已登录"）
 const password = ref("");
 const loginError = ref("");
 const fileInput = ref(null);
@@ -287,7 +287,6 @@ async function send() {
         if (currentMsg) currentMsg.trace = traces;     // 面板复活的关键
         scrollToBottom();
         status.value = "";
-        loading.value = false;
       },
       error(data) {
         flushQueue(); status.value = "";
@@ -295,20 +294,21 @@ async function send() {
           currentMsg.content = data;
           currentMsg.trace = traces;
         }
-        loading.value = false;
       },
       aborted() {                                     // 用户点"停止" → 保留已生成的部分
         flushQueue();
         if (currentMsg) currentMsg.trace = traces;
         status.value = "";
-        loading.value = false;
       },
     }, abortController.signal);
   } catch (e) {
     flushQueue(); status.value = "";
     messages.value.push({ role: "assistant", content: "请求失败，请确认后端已启动" });
-    loading.value = false;
   } finally {
+    // loading 复位收口在这里：done/error/aborted/401/异常任何路径都必经 finally，
+    // 之前 401 路径没人复位 loading，导致输入框永久禁用
+    status.value = "";
+    loading.value = false;
     abortController = null;
   }
 }
@@ -340,7 +340,8 @@ async function loadHistoryAndShow() {
       scrollToBottom();
     }
   } catch (e) {
-    // 加载失败就空着，不阻塞聊天
+    // 加载失败不阻塞聊天，但绝不静默——至少留日志，方便排查"历史莫名没显示"
+    console.warn("[study-agent] 加载历史失败:", e);
   }
 }
 

@@ -4,6 +4,18 @@ export function getToken() {
   return localStorage.getItem("access_token") || "";
 }
 
+// 判断 token 是否存在且未过期。
+// token 格式是 "签发秒级时间戳.签名"，后端 _TOKEN_TTL = 24*3600（校验 now - ts > TTL 即过期），
+// 前端照同一规则本地预判 → 避免"token 已过期但页面还以为登录着"。
+// 注意：24h 这个数目前和后端各写一份（两处硬编码）；以后优化方向是登录响应带 expires_in。
+export function isTokenValid() {
+  const token = getToken();
+  if (!token || !token.includes(".")) return false;
+  const issued = Number(token.split(".")[0]);
+  if (!Number.isFinite(issued)) return false;
+  return Date.now() / 1000 - issued < 24 * 3600;
+}
+
 export async function login(password) {
   const res = await fetch(`${BASE_URL}/login`, {
     method: "POST",
@@ -55,6 +67,7 @@ export async function loadHistory(conversationId) {
   const res = await fetch(`${BASE_URL}/history?conversation_id=${conversationId}`, {
     headers: { "Authorization": getToken() },
   });
+  if (res.status === 401) return { code: 401 };   // 令牌过期 → 交给页面跳登录（之前漏了这行，401 被静默吞掉）
   return res.json();
 }
 export async function uploadDocument(file, conversationId) {
