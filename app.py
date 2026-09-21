@@ -80,7 +80,8 @@ class QuizRequest(BaseModel):
 @app.post("/api/login")
 async def login(req: LoginRequest):
     if not ACCESS_PASSWORD or req.password == ACCESS_PASSWORD:
-        return {"code": 200, "token": _make_token()}
+        # expires_in：令牌多少秒后过期（TTL 的唯一来源，前端据此算过期时刻，不各自硬编码）
+        return {"code": 200, "token": _make_token(), "expires_in": _TOKEN_TTL}
     raise HTTPException(status_code=401, detail="密码错误")
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...), conversation_id: str = Form("default"), _: None = Depends(_require_auth)):

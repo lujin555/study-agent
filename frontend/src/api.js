@@ -5,15 +5,12 @@ export function getToken() {
 }
 
 // 判断 token 是否存在且未过期。
-// token 格式是 "签发秒级时间戳.签名"，后端 _TOKEN_TTL = 24*3600（校验 now - ts > TTL 即过期），
-// 前端照同一规则本地预判 → 避免"token 已过期但页面还以为登录着"。
-// 注意：24h 这个数目前和后端各写一份（两处硬编码）；以后优化方向是登录响应带 expires_in。
+// 过期时刻在登录成功时由响应里的 expires_in（后端 _TOKEN_TTL，唯一来源）换算成
+// 绝对时间戳存进 localStorage —— 前端不再写死 24h，改 TTL 只需动后端一处。
 export function isTokenValid() {
-  const token = getToken();
-  if (!token || !token.includes(".")) return false;
-  const issued = Number(token.split(".")[0]);
-  if (!Number.isFinite(issued)) return false;
-  return Date.now() / 1000 - issued < 24 * 3600;
+  if (!getToken()) return false;
+  const expiresAt = Number(localStorage.getItem("token_expires_at"));
+  return Number.isFinite(expiresAt) && expiresAt > 0 && Date.now() < expiresAt;
 }
 
 export async function login(password) {

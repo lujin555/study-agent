@@ -317,6 +317,8 @@ async function doLogin() {
   const res = await login(password.value);
   if (res.code === 200) {
     localStorage.setItem("access_token", res.token);
+    // 换算绝对过期时刻存下来，isTokenValid 只认它（expires_in 秒 → 毫秒时间戳）
+    localStorage.setItem("token_expires_at", String(Date.now() + res.expires_in * 1000));
     authed.value = true;
     password.value = "";
     loadHistoryAndShow();
@@ -327,6 +329,7 @@ async function doLogin() {
 
 function onUnauthorized() {
   localStorage.removeItem("access_token");
+  localStorage.removeItem("token_expires_at");
   authed.value = false;
   loginError.value = "登录已过期，请重新输入密码";
 }
